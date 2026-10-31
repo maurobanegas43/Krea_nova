@@ -2,6 +2,7 @@ package gin
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -10,6 +11,22 @@ import (
 	"github.com/maurobanegas43/proyecto_final/backend/internal/application/services"
 	"github.com/maurobanegas43/proyecto_final/backend/internal/domain/user"
 )
+
+type loginRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type authUserResponse struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	Role          string `json:"role"`
+	UserType      string `json:"userType"`
+	Name          string `json:"name"`
+	TaxId         string `json:"taxId,omitempty"`
+	KYCStatus     string `json:"kycStatus"`
+	IsKYCVerified bool   `json:"isKycVerified"`
+}
 
 type registerRequest struct {
 	Email             string `json:"email" binding:"required,email"`
@@ -27,6 +44,23 @@ type verifyGoogleRequest struct {
 	IDToken string `json:"idToken" binding:"required"`
 }
 
+type googleLoginRequest struct {
+	IDToken         string `json:"idToken" binding:"required"`
+	DeviceID        string `json:"deviceId"`
+	DeviceToken     string `json:"deviceToken"`
+	DeviceName      string `json:"deviceName"`
+	Fingerprint     string `json:"fingerprint"`
+	UserConsent     bool   `json:"userConsent"`
+	AuthorizeDevice bool   `json:"authorizeDevice"`
+}
+
+type authorizeDeviceRequest struct {
+	UserID      string `json:"userId" binding:"required"`
+	DeviceID    string `json:"deviceId" binding:"required"`
+	DeviceName  string `json:"deviceName"`
+	Fingerprint string `json:"fingerprint"`
+}
+
 type verifyLivenessRequest struct {
 	SessionID  string  `json:"sessionId" binding:"required"`
 	ProofHash  string  `json:"proofHash" binding:"required"`
@@ -34,16 +68,26 @@ type verifyLivenessRequest struct {
 }
 
 type investorProfileRequest struct {
-	FullName           string `json:"fullName" binding:"required"`
-	DNI                string `json:"dni" binding:"required"`         // Sensitive PII
-	CUIL               string `json:"cuil" binding:"required"`        // Sensitive PII
-	BirthDate          string `json:"birthDate" binding:"required"`
-	Address            string `json:"address" binding:"required"`     // Sensitive PII
-	City               string `json:"city" binding:"required"`
-	Province           string `json:"province" binding:"required"`
-	FundsOrigin        string `json:"fundsOrigin" binding:"required"`
-	IsPEP              bool   `json:"isPep"`
-	IsObligatedSubject bool   `json:"isObligatedSubject"`
+	FullName                 string `json:"fullName" binding:"required"`
+	DNI                      string `json:"dni" binding:"required"`         // Sensitive PII
+	CUIL                     string `json:"cuil" binding:"required"`        // Sensitive PII
+	BirthDate                string `json:"birthDate" binding:"required"`
+	Address                  string `json:"address" binding:"required"`     // Sensitive PII
+	City                     string `json:"city" binding:"required"`
+	Province                 string `json:"province" binding:"required"`
+	FundsOrigin              string `json:"fundsOrigin" binding:"required"`
+	IsPEP                    bool   `json:"isPep"`
+	IsObligatedSubject       bool   `json:"isObligatedSubject"`
+	Phone                    string `json:"phone"`
+	PayoutCurrency           string `json:"payoutCurrency"`
+	BankCbuOrAlias           string `json:"bankCbuOrAlias"`
+	BankName                 string `json:"bankName"`
+	Web3WalletAddress        string `json:"web3WalletAddress"`
+	AutoReinvestYield        bool   `json:"autoReinvestYield"`
+	TwoFactorEnabled         bool   `json:"twoFactorEnabled"`
+	NotifyConstructionAlerts bool   `json:"notifyConstructionAlerts"`
+	NotifyAuditReports       bool   `json:"notifyAuditReports"`
+	NotifyEarlyAccess        bool   `json:"notifyEarlyAccess"`
 }
 
 type updateKYCRequest struct {
@@ -75,10 +119,69 @@ func (h *UserHandler) Register(rg *gin.RouterGroup) {
 
 func (h *UserHandler) RegisterAuthRoutes(rg *gin.RouterGroup) {
 	g := rg.Group("/auth")
+	g.POST("/login", h.login)
+	g.POST("/verify-password", h.verifyPassword)
 	g.POST("/google/verify", h.verifyGoogleToken)
+	g.POST("/google/login", h.googleLogin)
+	g.POST("/devices/trust", h.authorizeDevice)
+	g.GET("/devices/:userId", h.listDevices)
+	g.DELETE("/devices/:userId/:deviceId", h.revokeDevice)
 	g.POST("/liveness/session", h.createLivenessSession)
 	g.POST("/liveness/verify", h.verifyLiveness)
 	g.GET("/liveness/session/:id", h.getLivenessSession)
+}
+
+func (h *UserHandler) verifyPassword(c *gin.Context) {
+	var req loginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Code: "INVALID_REQUEST", Message: "Email y contraseña requeridos"})
+		return
+	}
+
+	_, _, err := h.svc.AuthenticateUser(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, errorResponse{Code: "INVALID_PASSWORD", Message: "Contraseña incorrecta"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"valid": true, "message": "Contraseña verificada con éxito"})
+}
+
+func (h *UserHandler) login(c *gin.Context) {
+	var req loginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Code: "INVALID_REQUEST", Message: "Email y contraseña requeridos"})
+		return
+	}
+
+	u, profile, err := h.svc.AuthenticateUser(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, errorResponse{Code: "INVALID_CREDENTIALS", Message: "Email o contraseña incorrectos"})
+		return
+	}
+
+	name := u.Email
+	taxID := ""
+	kycStatus := "verified"
+	isVerified := true
+
+	if profile != nil {
+		name = profile.FullName
+		taxID = profile.CUIL
+		kycStatus = string(profile.KYCStatus)
+		isVerified = profile.KYCStatus == user.KYCVerified
+	}
+
+	c.JSON(http.StatusOK, authUserResponse{
+		ID:            u.ID,
+		Email:         u.Email,
+		Role:          string(u.Role),
+		UserType:      string(u.UserType),
+		Name:          name,
+		TaxId:         taxID,
+		KYCStatus:     kycStatus,
+		IsKYCVerified: isVerified,
+	})
 }
 
 func (h *UserHandler) createLivenessSession(c *gin.Context) {
@@ -162,6 +265,7 @@ func (h *UserHandler) verifyGoogleToken(c *gin.Context) {
 func (h *UserHandler) register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("registration JSON bind error: %v", err)
 		c.JSON(http.StatusBadRequest, errorResponse{Code: "INVALID_REQUEST", Message: err.Error()})
 		return
 	}
@@ -178,8 +282,9 @@ func (h *UserHandler) register(c *gin.Context) {
 		LivenessVerified:  req.LivenessVerified,
 	})
 	if err != nil {
+		log.Printf("RegisterUser error: %v (email: %s, role: %s, livenessSessionID: %s)", err, req.Email, req.Role, req.LivenessSessionID)
 		if errors.Is(err, services.ErrUserAlreadyExists) {
-			c.JSON(http.StatusConflict, errorResponse{Code: "USER_ALREADY_EXISTS", Message: err.Error()})
+			c.JSON(http.StatusConflict, errorResponse{Code: "USER_ALREADY_EXISTS", Message: "El correo electrónico ya se encuentra registrado."})
 			return
 		}
 		c.JSON(http.StatusBadRequest, errorResponse{Code: "REGISTRATION_FAILED", Message: err.Error()})
@@ -206,30 +311,50 @@ func (h *UserHandler) saveInvestorProfile(c *gin.Context) {
 	}
 
 	profile, err := h.svc.SaveInvestorProfile(c.Request.Context(), services.SaveInvestorProfileCommand{
-		UserID:             userID,
-		FullName:           req.FullName,
-		DNI:                req.DNI,
-		CUIL:               req.CUIL,
-		BirthDate:          req.BirthDate,
-		Address:            req.Address,
-		City:               req.City,
-		Province:           req.Province,
-		FundsOrigin:        req.FundsOrigin,
-		IsPEP:              req.IsPEP,
-		IsObligatedSubject: req.IsObligatedSubject,
+		UserID:                   userID,
+		FullName:                 req.FullName,
+		DNI:                      req.DNI,
+		CUIL:                     req.CUIL,
+		BirthDate:                req.BirthDate,
+		Address:                  req.Address,
+		City:                     req.City,
+		Province:                 req.Province,
+		FundsOrigin:              req.FundsOrigin,
+		IsPEP:                    req.IsPEP,
+		IsObligatedSubject:       req.IsObligatedSubject,
+		Phone:                    req.Phone,
+		PayoutCurrency:           req.PayoutCurrency,
+		BankCbuOrAlias:           req.BankCbuOrAlias,
+		BankName:                 req.BankName,
+		Web3WalletAddress:        req.Web3WalletAddress,
+		AutoReinvestYield:        req.AutoReinvestYield,
+		TwoFactorEnabled:         req.TwoFactorEnabled,
+		NotifyConstructionAlerts: req.NotifyConstructionAlerts,
+		NotifyAuditReports:       req.NotifyAuditReports,
+		NotifyEarlyAccess:        req.NotifyEarlyAccess,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{Code: "PROFILE_SAVE_FAILED", Message: err.Error()})
 		return
 	}
 
-	// Respond with acknowledgement without echoing plaintext PII back
+	// Respond with acknowledgement and populated fields
 	c.JSON(http.StatusOK, gin.H{
-		"id":        profile.ID,
-		"userId":    profile.UserID,
-		"fullName":  profile.FullName,
-		"kycStatus": profile.KYCStatus,
-		"status":    "stored_encrypted",
+		"id":                       profile.ID,
+		"userId":                   profile.UserID,
+		"fullName":                 profile.FullName,
+		"kycStatus":                profile.KYCStatus,
+		"phone":                    profile.Phone,
+		"payoutCurrency":           profile.PayoutCurrency,
+		"bankCbuOrAlias":           profile.BankCbuOrAlias,
+		"bankName":                 profile.BankName,
+		"web3WalletAddress":        profile.Web3WalletAddress,
+		"autoReinvestYield":        profile.AutoReinvestYield,
+		"twoFactorEnabled":         profile.TwoFactorEnabled,
+		"notifyConstructionAlerts": profile.NotifyConstructionAlerts,
+		"notifyAuditReports":       profile.NotifyAuditReports,
+		"notifyEarlyAccess":        profile.NotifyEarlyAccess,
+		"status":                   "stored_encrypted",
 	})
 }
 
@@ -290,4 +415,161 @@ func (h *UserHandler) recordConsent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"status": "recorded"})
+}
+
+func (h *UserHandler) googleLogin(c *gin.Context) {
+	var req googleLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Code: "INVALID_REQUEST", Message: err.Error()})
+		return
+	}
+
+	ip := c.ClientIP()
+	if ip == "" {
+		ip = "127.0.0.1"
+	}
+	ua := c.GetHeader("User-Agent")
+
+	res, err := h.svc.AuthenticateWithGoogle(c.Request.Context(), services.GoogleLoginCommand{
+		IDToken:         req.IDToken,
+		DeviceID:        req.DeviceID,
+		DeviceToken:     req.DeviceToken,
+		DeviceName:      req.DeviceName,
+		Fingerprint:     req.Fingerprint,
+		IPAddress:       ip,
+		UserAgent:       ua,
+		UserConsent:     req.UserConsent,
+		AuthorizeDevice: req.AuthorizeDevice,
+	})
+
+	if err != nil {
+		if errors.Is(err, services.ErrAccountNotAssociated) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    "ACCOUNT_NOT_ASSOCIATED",
+				"message": "La cuenta de Google no se encuentra registrada o asociada en el sistema. Por favor, crea tu cuenta primero.",
+			})
+			return
+		}
+		if errors.Is(err, user.ErrUserInactive) {
+			c.JSON(http.StatusForbidden, errorResponse{Code: "USER_INACTIVE", Message: "La cuenta está inactiva o suspendida."})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, errorResponse{Code: "AUTH_FAILED", Message: err.Error()})
+		return
+	}
+
+	if res.RequiresUserConsent {
+		c.JSON(http.StatusOK, gin.H{
+			"status":              "REQUIRE_USER_CONSENT",
+			"message":             "Se requiere tu confirmación para iniciar sesión con Google",
+			"requiresUserConsent": true,
+			"email":               res.GoogleEmail,
+			"name":                res.GoogleName,
+			"picture":             res.GooglePicture,
+		})
+		return
+	}
+
+	if res.RequiresDeviceAuthorization {
+		c.JSON(http.StatusOK, gin.H{
+			"status":                      "REQUIRE_DEVICE_AUTHORIZATION",
+			"message":                     "Dispositivo no reconocido. Se requiere autorización de dispositivo de confianza.",
+			"requiresDeviceAuthorization": true,
+			"email":                       res.GoogleEmail,
+			"name":                        res.GoogleName,
+			"deviceId":                    req.DeviceID,
+		})
+		return
+	}
+
+	// Successful login
+	name := res.User.Email
+	taxID := ""
+	kycStatus := "verified"
+	isVerified := true
+
+	if res.Profile != nil {
+		name = res.Profile.FullName
+		taxID = res.Profile.CUIL
+		kycStatus = string(res.Profile.KYCStatus)
+		isVerified = res.Profile.KYCStatus == user.KYCVerified
+	}
+
+	resp := gin.H{
+		"id":            res.User.ID,
+		"email":         res.User.Email,
+		"role":          string(res.User.Role),
+		"userType":      string(res.User.UserType),
+		"name":          name,
+		"taxId":         taxID,
+		"kycStatus":     kycStatus,
+		"isKycVerified": isVerified,
+	}
+
+	if res.TrustedDevice != nil {
+		resp["trustedDevice"] = gin.H{
+			"deviceId":    res.TrustedDevice.DeviceID,
+			"deviceToken": res.TrustedDevice.DeviceToken,
+			"deviceName":  res.TrustedDevice.DeviceName,
+			"trustedAt":   res.TrustedDevice.TrustedAt.Format(time.RFC3339),
+			"lastUsedAt":  res.TrustedDevice.LastUsedAt.Format(time.RFC3339),
+		}
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *UserHandler) authorizeDevice(c *gin.Context) {
+	var req authorizeDeviceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Code: "INVALID_REQUEST", Message: err.Error()})
+		return
+	}
+
+	ip := c.ClientIP()
+	if ip == "" {
+		ip = "127.0.0.1"
+	}
+	ua := c.GetHeader("User-Agent")
+
+	device, err := h.svc.AuthorizeTrustedDevice(
+		c.Request.Context(),
+		req.UserID,
+		req.DeviceID,
+		req.DeviceName,
+		req.Fingerprint,
+		ip,
+		ua,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Code: "AUTHORIZE_DEVICE_FAILED", Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"deviceId":    device.DeviceID,
+		"deviceToken": device.DeviceToken,
+		"deviceName":  device.DeviceName,
+		"trustedAt":   device.TrustedAt.Format(time.RFC3339),
+	})
+}
+
+func (h *UserHandler) listDevices(c *gin.Context) {
+	userID := c.Param("userId")
+	devices, err := h.svc.ListTrustedDevices(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Code: "LIST_DEVICES_FAILED", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, devices)
+}
+
+func (h *UserHandler) revokeDevice(c *gin.Context) {
+	userID := c.Param("userId")
+	deviceID := c.Param("deviceId")
+	if err := h.svc.RevokeTrustedDevice(c.Request.Context(), userID, deviceID); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Code: "REVOKE_DEVICE_FAILED", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "revoked"})
 }

@@ -122,3 +122,31 @@ func (r *FundRepository) GetAccountBalance(_ context.Context, accountID string) 
 	}
 	return balance, nil
 }
+
+func (r *FundRepository) ListLedgerEntriesByAccount(_ context.Context, accountID string) ([]fund.LedgerEntry, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []fund.LedgerEntry
+	for i := len(r.entries) - 1; i >= 0; i-- {
+		if r.entries[i].AccountID == accountID {
+			out = append(out, r.entries[i])
+		}
+	}
+	return out, nil
+}
+
+func (r *FundRepository) GetFiduciaryAccount(_ context.Context) (*fund.FiduciaryAccount, error) {
+	return &fund.FiduciaryAccount{
+		ID:                 "fid-acc-01",
+		BankName:           "Banco Industrial (BIND Fideicomisos)",
+		AccountHolder:      "Krea Nova Capital Fideicomiso Financiero Inmobiliario I",
+		CUIT:               "30-71889900-4",
+		AccountType:        "Cuenta Especial Fiduciaria Ley 24.441 en USD",
+		CBU:                "0290000100000000123456",
+		Alias:              "KREANOVA.CUSTODIA.USD",
+		Currency:           "USD",
+		CryptoToken:        "USDC",
+		CryptoNetwork:      "Ethereum Sepolia / Polygon PoS",
+		CryptoVaultAddress: "0x71C6793A8B101E1794b15B8e48bE5a46E71182dA",
+	}, nil
+}

@@ -14,6 +14,7 @@ type UserRepository struct {
 	byEmail  map[string]string // email -> user_id
 	profiles map[string]*user.InvestorProfile
 	consents []*user.LegalConsent
+	devices  map[string]*user.TrustedDevice // key: userID + ":" + deviceID
 }
 
 func NewUserRepository() *UserRepository {
@@ -22,6 +23,7 @@ func NewUserRepository() *UserRepository {
 		byEmail:  make(map[string]string),
 		profiles: make(map[string]*user.InvestorProfile),
 		consents: make([]*user.LegalConsent, 0),
+		devices:  make(map[string]*user.TrustedDevice),
 	}
 }
 
@@ -79,6 +81,14 @@ func (r *UserRepository) UpdateKYCStatus(_ context.Context, userID string, statu
 	defer r.mu.Unlock()
 	p, ok := r.profiles[userID]
 	if !ok {
+		now := time.Now()
+		r.profiles[userID] = &user.InvestorProfile{
+			ID:         userID + "-prof",
+			UserID:     userID,
+			FullName:   "Investor " + userID,
+			KYCStatus:  status,
+			VerifiedAt: &now,
+		}
 		return nil
 	}
 	p.KYCStatus = status
@@ -94,5 +104,50 @@ func (r *UserRepository) SaveLegalConsent(_ context.Context, consent *user.Legal
 	defer r.mu.Unlock()
 	cp := *consent
 	r.consents = append(r.consents, &cp)
+	return nil
+}
+
+func (r *UserRepository) SaveTrustedDevice(_ context.Context, device *user.TrustedDevice) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := device.UserID + ":" + device.DeviceID
+	cp := *device
+	r.devices[key] = &cp
+	return nil
+}
+
+func (r *UserRepository) FindTrustedDevice(_ context.Context, userID, deviceID string) (*user.TrustedDevice, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	key := userID + ":" + deviceID
+	d, ok := r.devices[key]
+	if !ok || !d.IsActive {
+		return nil, nil
+	}
+	cp := *d
+	return &cp, nil
+}
+
+func (r *UserRepository) ListTrustedDevices(_ context.Context, userID string) ([]*user.TrustedDevice, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var list []*user.TrustedDevice
+	prefix := userID + ":"
+	for k, d := range r.devices {
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix && d.IsActive {
+			cp := *d
+			list = append(list, &cp)
+		}
+	}
+	return list, nil
+}
+
+func (r *UserRepository) RevokeTrustedDevice(_ context.Context, userID, deviceID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := userID + ":" + deviceID
+	if d, ok := r.devices[key]; ok {
+		d.IsActive = false
+	}
 	return nil
 }

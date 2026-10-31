@@ -9,32 +9,31 @@ import {
   Mail,
   User,
   Phone,
-  Calendar,
   Eye,
   EyeOff,
   Sun,
   Moon,
-  X,
+  AlertCircle,
+  AlertTriangle,
+  Laptop,
+  CheckCircle2,
+  Fingerprint,
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { INITIAL_DEVELOPERS } from '../../services/api';
-import { DeveloperProfile } from '../../types';
+import { api } from '../../services/api';
 import {
-  validateCuitCuil,
-  validateDni,
-  validateAdultAge,
   validatePassword,
   validateEmail,
-  validateGmailAddress,
 } from './legalValidation';
-import { GoogleAuthButton } from './components/GoogleAuthButton';
+import { GoogleLoginButton } from './components/GoogleLoginButton';
 import { FaceLivenessVerification, LivenessProofResult } from './components/FaceLivenessVerification';
+import { getDeviceInfo, saveTrustedDeviceToken, DeviceInfo } from './trustedDevice';
 
 export const AuthPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { login, registerInvestor, registerCorporate } = useAuth();
+  const { login, loginWithGoogle, registerInvestor, registerCorporate } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   // Mode: login or register
@@ -43,10 +42,20 @@ export const AuthPage: React.FC = () => {
 
   // Step state for register wizard (Investor: 1: Contact, 2: FaceX Liveness, 3: Legal Data, 4: Declarations)
   const [registerStep, setRegisterStep] = useState<number>(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Google Login & Trusted Device state
+  const [googleLoginState, setGoogleLoginState] = useState<'idle' | 'loading' | 'consent' | 'trusted_device' | 'unassociated_error'>('idle');
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+  const [googleUserData, setGoogleUserData] = useState<{ email: string; name?: string; picture?: string; idToken: string } | null>(null);
+  const [detectedDevice, setDetectedDevice] = useState<DeviceInfo | null>(null);
+  const [trustDeviceConsent, setTrustDeviceConsent] = useState(true);
 
   // Google GSI & FaceX Biometrics state (Investor onboarding)
   const [googleVerifiedEmail, setGoogleVerifiedEmail] = useState<string | null>(null);
   const [googleIdToken, setGoogleIdToken] = useState<string | null>(null);
+  const [googleAuthNotice, setGoogleAuthNotice] = useState<string | null>(null);
+  const [googleRegisterLoading, setGoogleRegisterLoading] = useState(false);
   const [livenessProof, setLivenessProof] = useState<LivenessProofResult | null>(null);
 
   // Common credentials state
@@ -55,38 +64,13 @@ export const AuthPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
-  const [developerModalOpen, setDeveloperModalOpen] = useState(false);
 
   // Investor specific fields
   const [fullName, setFullName] = useState('');
-  const [dni, setDni] = useState('');
-  const [cuil, setCuil] = useState('');
-  const [birthDate, setBirthDate] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [province, setProvince] = useState('Buenos Aires');
-  const [fundsOrigin, setFundsOrigin] = useState('Ahorros / Ingresos laborales');
-  const [isPep, setIsPep] = useState<boolean>(false);
-  const [isObligatedSubject, setIsObligatedSubject] = useState<boolean>(false);
 
   // Corporate specific fields
   const [companyName, setCompanyName] = useState('');
   const [tradeName, setTradeName] = useState('');
-  const [companyType, setCompanyType] = useState('Sociedad Anónima (S.A.)');
-  const [cuit, setCuit] = useState('');
-  const [registrationNumber, setRegistrationNumber] = useState('');
-  const [legalAddress, setLegalAddress] = useState('');
-  const [repFullName, setRepFullName] = useState('');
-  const [repRole, setRepRole] = useState('Presidente / Director General');
-  const [repDni, setRepDni] = useState('');
-  const [repCuil, setRepCuil] = useState('');
-  const [uboDeclared, setUboDeclared] = useState(false);
-
-  // Independent legal consents (mandatory by Ley 25.326 & legal.md sec. 7.6)
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [privacyAccepted, setPrivacyAccepted] = useState(false);
-  const [swornTruthAccepted, setSwornTruthAccepted] = useState(false);
-  const [marketingOptIn, setMarketingOptIn] = useState(false);
 
   // Form error states
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -100,7 +84,7 @@ export const AuthPage: React.FC = () => {
   }, [searchParams]);
 
   // Handle Login submission
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const emailCheck = validateEmail(email);
     if (!emailCheck.isValid) {
@@ -112,35 +96,180 @@ export const AuthPage: React.FC = () => {
       return;
     }
 
-    login(email, role);
-    navigate('/app');
-  };
-
-  // Quick demo login buttons for evaluation convenience
-  const handleQuickDemoLogin = (demoRole: 'investor' | 'developer') => {
-    if (demoRole === 'developer') {
-      setDeveloperModalOpen(true);
-      return;
+    try {
+      await login(email, password, role);
+      navigate('/app');
+    } catch (err: any) {
+      setFormErrors({ password: err.message || 'Credenciales inválidas' });
     }
-    const demoEmail = 'inversor@kreanova.capital';
-    login(demoEmail, demoRole);
-    navigate('/app');
   };
 
-  const handleSelectDeveloper = (dev: DeveloperProfile) => {
-    login(dev.email, 'developer', {
-      id: dev.id,
-      name: dev.tradeName || dev.companyName,
-      legalName: dev.companyName,
-      taxId: dev.cuit,
-      companyType: dev.companyType,
-      legalRepresentative: dev.repFullName,
+  // Google Login initiation & association validation
+  const handleGoogleLoginInitiate = async (data: {
+    email: string;
+    name?: string;
+    picture?: string;
+    idToken: string;
+  }) => {
+    setGoogleLoginState('loading');
+    setGoogleAuthError(null);
+    setGoogleUserData(data);
+
+    try {
+      const devInfo = await getDeviceInfo();
+      setDetectedDevice(devInfo);
+
+      // Attempt login with userConsent: false to check association & consent first
+      const res = await api.googleLogin({
+        idToken: data.idToken,
+        deviceId: devInfo.deviceId,
+        deviceToken: devInfo.deviceToken || undefined,
+        deviceName: devInfo.deviceName,
+        fingerprint: devInfo.fingerprint,
+        userConsent: false,
+        authorizeDevice: false,
+      });
+
+      if (res.requiresUserConsent) {
+        setGoogleLoginState('consent');
+        return;
+      }
+
+      if (res.requiresDeviceAuthorization) {
+        setGoogleLoginState('trusted_device');
+        return;
+      }
+
+      if (res.trustedDevice?.deviceToken) {
+        saveTrustedDeviceToken(res.trustedDevice.deviceToken);
+      }
+      await loginWithGoogle(res);
+      navigate('/app');
+    } catch (err: any) {
+      if (err.code === 'ACCOUNT_NOT_ASSOCIATED' || err.status === 404) {
+        setGoogleLoginState('unassociated_error');
+      } else {
+        setGoogleAuthError(err.message || 'Error al iniciar sesión con Google');
+        setGoogleLoginState('idle');
+      }
+    }
+  };
+
+  // Explicit user consent given to start session
+  const handleConfirmGoogleConsent = async () => {
+    if (!googleUserData || !detectedDevice) return;
+    setGoogleLoginState('loading');
+    setGoogleAuthError(null);
+
+    try {
+      const res = await api.googleLogin({
+        idToken: googleUserData.idToken,
+        deviceId: detectedDevice.deviceId,
+        deviceToken: detectedDevice.deviceToken || undefined,
+        deviceName: detectedDevice.deviceName,
+        fingerprint: detectedDevice.fingerprint,
+        userConsent: true,
+        authorizeDevice: false,
+      });
+
+      if (res.requiresDeviceAuthorization) {
+        setGoogleLoginState('trusted_device');
+        return;
+      }
+
+      if (res.trustedDevice?.deviceToken) {
+        saveTrustedDeviceToken(res.trustedDevice.deviceToken);
+      }
+      await loginWithGoogle(res);
+      navigate('/app');
+    } catch (err: any) {
+      if (err.code === 'ACCOUNT_NOT_ASSOCIATED' || err.status === 404) {
+        setGoogleLoginState('unassociated_error');
+      } else {
+        setGoogleAuthError(err.message || 'Error al validar consentimiento');
+        setGoogleLoginState('idle');
+      }
+    }
+  };
+
+  // Explicit device authorization confirmed
+  const handleConfirmDeviceAuthorization = async () => {
+    if (!googleUserData || !detectedDevice) return;
+    setGoogleLoginState('loading');
+    setGoogleAuthError(null);
+
+    try {
+      const res = await api.googleLogin({
+        idToken: googleUserData.idToken,
+        deviceId: detectedDevice.deviceId,
+        deviceName: detectedDevice.deviceName,
+        fingerprint: detectedDevice.fingerprint,
+        userConsent: true,
+        authorizeDevice: true, // Registers this device as trusted and issues unique token
+      });
+
+      if (res.trustedDevice?.deviceToken) {
+        saveTrustedDeviceToken(res.trustedDevice.deviceToken);
+      }
+      await loginWithGoogle(res);
+      navigate('/app');
+    } catch (err: any) {
+      setGoogleAuthError(err.message || 'Fallo al autorizar el dispositivo de confianza');
+      setGoogleLoginState('trusted_device');
+    }
+  };
+
+  // Google Registration Autofill Success Handler
+  const handleGoogleRegisterSuccess = async (data: { email: string; name?: string; picture?: string; idToken: string }) => {
+    setGoogleRegisterLoading(false);
+    setGoogleAuthNotice(null);
+
+    // Verify token with backend
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+      const verifyRes = await fetch(`${apiBase}/auth/google/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: data.idToken }),
+      });
+
+      if (verifyRes.ok) {
+        const verifiedData = await verifyRes.json();
+        if (verifiedData.name && !fullName) {
+          setFullName(verifiedData.name);
+        }
+        if (verifiedData.email) {
+          setEmail(verifiedData.email);
+          setGoogleVerifiedEmail(verifiedData.email);
+        }
+      } else {
+        if (data.name && !fullName) setFullName(data.name);
+        if (data.email) {
+          setEmail(data.email);
+          setGoogleVerifiedEmail(data.email);
+        }
+      }
+    } catch {
+      if (data.name && !fullName) setFullName(data.name);
+      if (data.email) {
+        setEmail(data.email);
+        setGoogleVerifiedEmail(data.email);
+      }
+    }
+
+    setGoogleIdToken(data.idToken);
+    setGoogleAuthNotice('✓ Datos completados desde tu cuenta de Google. Podés editarlos libremente.');
+    setFormErrors((prev) => {
+      const copy = { ...prev };
+      delete copy.email;
+      delete copy.fullName;
+      delete copy.companyName;
+      delete copy.googleAuth;
+      return copy;
     });
-    setDeveloperModalOpen(false);
-    navigate('/app');
   };
 
-  // Step 1 Validation (Contact & Access)
+  // Step 1 Validation (Contact & Personal Data)
   const validateStep1 = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -154,164 +283,101 @@ export const AuthPage: React.FC = () => {
       }
     }
 
-    if (role === 'investor') {
-      const emailCheck = validateGmailAddress(email);
-      if (!emailCheck.isValid) {
-        errors.email = emailCheck.message || 'Se requiere una casilla @gmail.com válida para inversores';
-      }
-    } else {
-      const emailCheck = validateEmail(email);
-      if (!emailCheck.isValid) {
-        errors.email = emailCheck.message || 'Email inválido';
-      }
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      errors.email = emailCheck.message || 'Email inválido';
+    }
+
+    if (!phone.trim() || phone.trim().length < 8) {
+      errors.phone = 'Ingrese un número telefónico de contacto válido con código de área.';
     }
 
     const pwdCheck = validatePassword(password);
     if (!pwdCheck.isValid) {
-      errors.password = pwdCheck.message || 'Contraseña insegura';
-    }
-
-    if (!phone.trim() || phone.trim().length < 8) {
-      errors.phone = 'Ingrese un número telefónico de contacto válido.';
+      errors.password = pwdCheck.message || 'La contraseña debe contener al menos 8 caracteres, mayúscula, minúscula y número.';
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // Step 2 Validation (Legal & Identification)
-  const validateStep2 = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (role === 'investor') {
-      const dniCheck = validateDni(dni);
-      if (!dniCheck.isValid) {
-        errors.dni = dniCheck.message || 'DNI inválido';
-      }
-
-      const cuilCheck = validateCuitCuil(cuil);
-      if (!cuilCheck.isValid) {
-        errors.cuil = cuilCheck.message || 'CUIL inválido';
-      }
-
-      const ageCheck = validateAdultAge(birthDate);
-      if (!ageCheck.isValid) {
-        errors.birthDate = ageCheck.message || 'Debe ser mayor de 18 años';
-      }
-
-      if (!address.trim()) {
-        errors.address = 'El domicilio real es obligatorio para el registro legal.';
-      }
-      if (!city.trim()) {
-        errors.city = 'La localidad es requerida.';
-      }
-    } else {
-      const cuitCheck = validateCuitCuil(cuit);
-      if (!cuitCheck.isValid) {
-        errors.cuit = cuitCheck.message || 'CUIT inválido';
-      }
-
-      if (!registrationNumber.trim()) {
-        errors.registrationNumber = 'Ingrese el número de inscripción registral (IGJ/DPPJ).';
-      }
-
-      if (!legalAddress.trim()) {
-        errors.legalAddress = 'Ingrese el domicilio legal y sede social.';
-      }
-
-      if (!repFullName.trim() || repFullName.trim().split(' ').length < 2) {
-        errors.repFullName = 'Nombre y apellido completos del representante legal.';
-      }
-
-      const repDniCheck = validateDni(repDni);
-      if (!repDniCheck.isValid) {
-        errors.repDni = repDniCheck.message || 'DNI de representante inválido';
-      }
-
-      const repCuilCheck = validateCuitCuil(repCuil);
-      if (!repCuilCheck.isValid) {
-        errors.repCuil = repCuilCheck.message || 'CUIL de representante inválido';
-      }
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // Step 3 Validation & Registration
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  // Registration Submit handler
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const errors: Record<string, string> = {};
 
-    if (!termsAccepted) {
-      errors.termsAccepted = 'Debe aceptar los Términos y Condiciones.';
-    }
-    if (!privacyAccepted) {
-      errors.privacyAccepted = 'Debe prestar consentimiento informado (Ley 25.326).';
-    }
-    if (!swornTruthAccepted) {
-      errors.swornTruthAccepted = 'Debe declarar bajo juramento la veracidad de la información.';
-    }
-
-    if (role === 'developer' && !uboDeclared) {
-      errors.uboDeclared = 'Debe confirmar la declaración de Beneficiarios Finales (Res. UIF 49/2024).';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+    if (registerStep === 1) {
+      if (validateStep1()) {
+        setRegisterStep(2);
+      }
       return;
     }
 
-    if (role === 'investor') {
-      if (!livenessProof) {
-        setFormErrors({ liveness: 'Debe completar la prueba de vida biométrica para registrarse.' });
-        setRegisterStep(2);
-        return;
+    setIsSubmitting(true);
+    setFormErrors({});
+
+    try {
+      if (role === 'investor') {
+        if (!livenessProof) {
+          setFormErrors({ liveness: 'Debe completar la prueba de vida biométrica para finalizar el registro.' });
+          return;
+        }
+
+        await registerInvestor({
+          fullName,
+          email,
+          password,
+          phone,
+          dni: '',
+          cuil: '',
+          birthDate: '2000-01-01',
+          address: '',
+          city: '',
+          province: '',
+          isPep: false,
+          isObligatedSubject: false,
+          fundsOrigin: 'Ahorros personales',
+          termsAccepted: true,
+          privacyAccepted: true,
+          googleIdToken: googleIdToken || undefined,
+          livenessVerified: true,
+          livenessProofHash: livenessProof.proofHash,
+          livenessSessionId: livenessProof.sessionId,
+          livenessToken: livenessProof.verificationToken,
+        });
+      } else {
+        await registerCorporate({
+          companyName,
+          tradeName: tradeName || companyName,
+          companyType: 'S.A.',
+          cuit: '30-71122334-9',
+          registrationNumber: '',
+          legalAddress: '',
+          repFullName: companyName,
+          repRole: 'Apoderado',
+          repDni: '',
+          repCuil: '',
+          email,
+          password,
+          phone,
+          isPep: false,
+          uboDeclared: true,
+          termsAccepted: true,
+          privacyAccepted: true,
+        });
       }
 
-      registerInvestor({
-        fullName,
-        email,
-        phone,
-        dni,
-        cuil,
-        birthDate,
-        address,
-        city,
-        province,
-        isPep,
-        isObligatedSubject,
-        fundsOrigin,
-        termsAccepted,
-        privacyAccepted,
-        googleIdToken: googleIdToken || undefined,
-        livenessVerified: true,
-        livenessProofHash: livenessProof.proofHash,
-        livenessSessionId: livenessProof.sessionId,
-        livenessToken: livenessProof.verificationToken,
-      });
-    } else {
-      registerCorporate({
-        companyName,
-        tradeName: tradeName || companyName,
-        companyType,
-        cuit,
-        registrationNumber,
-        legalAddress,
-        repFullName,
-        repRole,
-        repDni,
-        repCuil,
-        email,
-        phone,
-        isPep,
-        uboDeclared,
-        termsAccepted,
-        privacyAccepted,
-      });
+      navigate('/app');
+    } catch (err: any) {
+      const msg = err.message || 'Error registrando usuario';
+      if (msg.toLowerCase().includes('ya se encuentra registrado') || msg.toLowerCase().includes('already exists')) {
+        setFormErrors({ email: 'Este correo electrónico ya se encuentra registrado. ¿Deseás iniciar sesión?' });
+        setRegisterStep(1);
+      } else {
+        setFormErrors({ general: msg });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    navigate('/app');
   };
 
   return (
@@ -387,8 +453,8 @@ export const AuthPage: React.FC = () => {
           alignItems: 'center',
           gap: '14px',
           textDecoration: 'none',
-          marginBottom: '26px',
-          marginTop: '40px',
+          marginBottom: '24px',
+          marginTop: isLogin ? '16px' : '40px',
         }}
       >
         <img
@@ -487,13 +553,55 @@ export const AuthPage: React.FC = () => {
         {/* ---------------- LOGIN VIEW ---------------- */}
         {isLogin ? (
           <div>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '6px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
                 Ingresá a tu cuenta
               </h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.5, margin: 0 }}>
-                Accedé a tu panel para ver tus inversiones y seguir tus rendimientos en dólares.
-              </p>
+            </div>
+
+            {/* Google Authentication for Login */}
+            <div style={{ marginBottom: '16px' }}>
+              <GoogleLoginButton
+                onSuccess={handleGoogleLoginInitiate}
+                onError={(err) => setGoogleAuthError(err)}
+                isLoading={googleLoginState === 'loading'}
+              />
+            </div>
+
+            {googleAuthError && (
+              <div
+                style={{
+                  marginBottom: '16px',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  color: '#ef4444',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{googleAuthError}</span>
+              </div>
+            )}
+
+            {/* Visual Divider */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                margin: '18px 0',
+                gap: '12px',
+              }}
+            >
+              <div style={{ flex: 1, height: '1px', background: 'var(--surface-glass-border)' }} />
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                o ingresá con correo
+              </span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--surface-glass-border)' }} />
             </div>
 
             <form onSubmit={handleLoginSubmit} style={{ display: 'grid', gap: '16px' }}>
@@ -650,68 +758,402 @@ export const AuthPage: React.FC = () => {
               </span>
             </div>
 
-            {/* Subtle Divider for Demo Profiles */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                margin: '22px 0 16px',
-                gap: '12px',
-              }}
-            >
-              <div style={{ flex: 1, height: '1px', background: 'var(--surface-glass-border)' }} />
-              <span style={{ fontSize: '11px', color: 'var(--text-subtle)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                o probá con una cuenta demo
-              </span>
-              <div style={{ flex: 1, height: '1px', background: 'var(--surface-glass-border)' }} />
-            </div>
+            {/* Modal: Cuenta de Google No Asociada */}
+            {googleLoginState === 'unassociated_error' && (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.75)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  zIndex: 120,
+                  padding: '20px',
+                }}
+                onClick={() => setGoogleLoginState('idle')}
+              >
+                <div
+                  style={{
+                    maxWidth: '440px',
+                    width: '100%',
+                    background: 'var(--surface-card)',
+                    borderRadius: '20px',
+                    padding: '24px',
+                    border: '1px solid var(--surface-glass-border)',
+                    boxShadow: 'var(--shadow-elevation)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div
+                      style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '12px',
+                        background: 'rgba(245, 158, 11, 0.12)',
+                        border: '1px solid rgba(245, 158, 11, 0.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#f59e0b',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <AlertTriangle size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                        Cuenta no asociada
+                      </h3>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        Validación de cuenta registrada
+                      </span>
+                    </div>
+                  </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('investor')}
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                    El correo <strong style={{ color: 'var(--text-primary)' }}>{googleUserData?.email}</strong> no se encuentra registrado ni asociado en Krea Nova.
+                    Para acceder y operar en la plataforma, debés crear tu cuenta primero.
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        setIsLogin(false);
+                        setRole('investor');
+                        if (googleUserData?.email) {
+                          setGoogleVerifiedEmail(googleUserData.email);
+                          setEmail(googleUserData.email);
+                        }
+                        if (googleUserData?.name) {
+                          setFullName(googleUserData.name);
+                        }
+                        setGoogleLoginState('idle');
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '42px',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        gap: '6px',
+                      }}
+                    >
+                      <span>Crear cuenta con este correo</span>
+                      <ArrowRight size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGoogleLoginState('idle')}
+                      style={{
+                        width: '100%',
+                        height: '38px',
+                        borderRadius: '10px',
+                        background: 'transparent',
+                        border: '1px solid var(--surface-glass-border)',
+                        color: 'var(--text-muted)',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Intentar con otro correo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal: Confirmación de Consentimiento del Usuario */}
+            {googleLoginState === 'consent' && (
+              <div
                 style={{
-                  height: '38px',
-                  padding: '0 12px',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  background: 'var(--color-surface-raised)',
-                  border: '1px solid var(--surface-glass-border)',
-                  color: 'var(--text-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'background var(--transition-fast)',
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.75)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  zIndex: 120,
+                  padding: '20px',
                 }}
               >
-                <span>👤 Inversor</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('developer')}
+                <div
+                  style={{
+                    maxWidth: '440px',
+                    width: '100%',
+                    background: 'var(--surface-card)',
+                    borderRadius: '20px',
+                    padding: '24px',
+                    border: '1px solid var(--surface-glass-border)',
+                    boxShadow: 'var(--shadow-elevation)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div
+                      style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '12px',
+                        background: 'rgba(99, 102, 241, 0.12)',
+                        border: '1px solid rgba(99, 102, 241, 0.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--brand-primary, #6366f1)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <UserCheck size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                        Confirmar inicio de sesión
+                      </h3>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        Autorización explícita requerida
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      background: 'var(--color-surface-raised)',
+                      border: '1px solid var(--surface-glass-border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '50%',
+                        background: 'var(--brand-primary, #6366f1)',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '14px',
+                      }}
+                    >
+                      {googleUserData?.name ? googleUserData.name.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {googleUserData?.name || 'Inversor Registrado'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {googleUserData?.email}
+                      </div>
+                    </div>
+                    <CheckCircle2 size={18} style={{ color: '#10b981', flexShrink: 0 }} />
+                  </div>
+
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                    ¿Autorizás el inicio de sesión en Krea Nova con esta cuenta de Google? Se verificará la validez del dispositivo antes de ingresar.
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setGoogleLoginState('idle')}
+                      style={{
+                        flex: 1,
+                        height: '42px',
+                        borderRadius: '10px',
+                        background: 'transparent',
+                        border: '1px solid var(--surface-glass-border)',
+                        color: 'var(--text-muted)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={handleConfirmGoogleConsent}
+                      style={{
+                        flex: 1.5,
+                        height: '42px',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        gap: '6px',
+                      }}
+                    >
+                      <span>Autorizar e Ingresar</span>
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal: Autorización de Dispositivo de Confianza */}
+            {googleLoginState === 'trusted_device' && (
+              <div
                 style={{
-                  height: '38px',
-                  padding: '0 12px',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  background: 'var(--color-surface-raised)',
-                  border: '1px solid var(--surface-glass-border)',
-                  color: 'var(--text-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'background var(--transition-fast)',
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.75)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  zIndex: 120,
+                  padding: '20px',
                 }}
               >
-                <span>🏢 Desarrolladora</span>
-              </button>
-            </div>
+                <div
+                  style={{
+                    maxWidth: '460px',
+                    width: '100%',
+                    background: 'var(--surface-card)',
+                    borderRadius: '20px',
+                    padding: '24px',
+                    border: '1px solid var(--surface-glass-border)',
+                    boxShadow: 'var(--shadow-elevation)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div
+                      style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '12px',
+                        background: 'rgba(16, 185, 129, 0.12)',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#10b981',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ShieldCheck size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                        Dispositivo de Confianza Requerido
+                      </h3>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        Token único de seguridad por dispositivo
+                      </span>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                    Detectamos un acceso desde un nuevo equipo o navegador. Para salvaguardar la custodia de tus activos, Krea Nova exige autorizar cada dispositivo y vincular un token criptográfico único.
+                  </p>
+
+                  <div
+                    style={{
+                      padding: '14px',
+                      borderRadius: '12px',
+                      background: 'var(--color-surface-raised)',
+                      border: '1px solid var(--surface-glass-border)',
+                      display: 'grid',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Laptop size={16} style={{ color: 'var(--brand-primary, #6366f1)' }} />
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {detectedDevice?.deviceName || 'Navegador Web'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                      <Fingerprint size={14} />
+                      <span style={{ fontFamily: 'monospace' }}>
+                        Token ID: kn-dev-{detectedDevice?.fingerprint ? detectedDevice.fingerprint.slice(0, 12) : 'gen'}...
+                      </span>
+                    </div>
+                  </div>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      cursor: 'pointer',
+                      fontSize: '12.5px',
+                      color: 'var(--text-primary)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={trustDeviceConsent}
+                      onChange={(e) => setTrustDeviceConsent(e.target.checked)}
+                      style={{ marginTop: '2px', accentColor: 'var(--brand-primary, #6366f1)', width: '16px', height: '16px' }}
+                    />
+                    <span>
+                      Confío en este dispositivo y autorizo a Krea Nova a registrar un token único de acceso seguro para futuras sesiones.
+                    </span>
+                  </label>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setGoogleLoginState('idle')}
+                      style={{
+                        flex: 1,
+                        height: '42px',
+                        borderRadius: '10px',
+                        background: 'transparent',
+                        border: '1px solid var(--surface-glass-border)',
+                        color: 'var(--text-muted)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={!trustDeviceConsent}
+                      onClick={handleConfirmDeviceAuthorization}
+                      style={{
+                        flex: 1.6,
+                        height: '42px',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        gap: '6px',
+                        opacity: !trustDeviceConsent ? 0.6 : 1,
+                        cursor: !trustDeviceConsent ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <ShieldCheck size={16} />
+                      <span>Autorizar Dispositivo</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Modal de Recuperación */}
             {forgotPasswordOpen && (
@@ -791,165 +1233,14 @@ export const AuthPage: React.FC = () => {
                 </div>
               </div>
             )}
-
-            {/* Modal de Inmobiliarias / Desarrolladoras Registradas */}
-            {developerModalOpen && (
-              <div
-                style={{
-                  position: 'fixed',
-                  inset: 0,
-                  background: 'rgba(0,0,0,0.75)',
-                  backdropFilter: 'blur(6px)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  zIndex: 110,
-                  padding: '20px',
-                }}
-                onClick={() => setDeveloperModalOpen(false)}
-              >
-                <div
-                  style={{
-                    maxWidth: '680px',
-                    width: '100%',
-                    maxHeight: '85vh',
-                    overflowY: 'auto',
-                    background: 'var(--surface-card)',
-                    borderRadius: '24px',
-                    padding: '28px',
-                    border: '1px solid var(--surface-glass-border)',
-                    boxShadow: 'var(--shadow-elevation)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '20px',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        <Building2 size={20} style={{ color: 'var(--brand-gold)' }} />
-                        <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                          Cuentas de Inmobiliarias & Desarrolladoras
-                        </h3>
-                      </div>
-                      <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
-                        Seleccioná una de las desarrolladoras homologadas para ingresar a la plataforma y gestionar proyectos.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setDeveloperModalOpen(false)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: '4px',
-                      }}
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'grid', gap: '12px' }}>
-                    {INITIAL_DEVELOPERS.map((dev) => (
-                      <div
-                        key={dev.id}
-                        style={{
-                          background: 'var(--color-surface-raised)',
-                          border: '1px solid var(--surface-glass-border)',
-                          borderRadius: '16px',
-                          padding: '16px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '10px',
-                          transition: 'border-color var(--transition-fast)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
-                                {dev.tradeName}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: '10px',
-                                  padding: '2px 8px',
-                                  borderRadius: '999px',
-                                  background: 'var(--surface-card)',
-                                  border: '1px solid var(--surface-glass-border)',
-                                  color: 'var(--text-muted)',
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {dev.companyType}
-                              </span>
-                            </div>
-                            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                              {dev.companyName} • CUIT: <strong className="mono">{dev.cuit}</strong>
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleSelectDeveloper(dev)}
-                            className="btn-primary"
-                            style={{
-                              padding: '8px 16px',
-                              borderRadius: '10px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              flexShrink: 0,
-                            }}
-                          >
-                            Ingresar
-                          </button>
-                        </div>
-
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                            gap: '8px',
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            paddingTop: '8px',
-                            borderTop: '1px solid var(--surface-glass-border)',
-                          }}
-                        >
-                          <div>
-                            <span style={{ color: 'var(--text-subtle)' }}>Representante: </span>
-                            <span style={{ color: 'var(--text-primary)' }}>{dev.repFullName}</span>
-                          </div>
-                          <div>
-                            <span style={{ color: 'var(--text-subtle)' }}>M² Entregados: </span>
-                            <strong style={{ color: 'var(--brand-gold)' }}>+{dev.deliveredM2.toLocaleString()} m²</strong>
-                          </div>
-                          <div style={{ gridColumn: '1 / -1' }}>
-                            <span style={{ color: 'var(--text-subtle)' }}>Foco: </span>
-                            <span>{dev.specialty}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           /* ---------------- REGISTER VIEW (DUAL PROFILES) ---------------- */
           <div>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '6px', color: 'var(--text-primary)' }}>
-                Registro y Alta Regulatoria
+              <h1 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '4px', color: 'var(--text-primary)' }}>
+                Registro
               </h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5 }}>
-                Conforme a la normativa argentina de prevención LA/FT/FP (Res. UIF 49/2024) y protección de datos personales (Ley 25.326).
-              </p>
             </div>
 
             {/* Profile Selector: Persona Humana vs Persona Jurídica */}
@@ -1036,60 +1327,19 @@ export const AuthPage: React.FC = () => {
                 fontWeight: 600,
               }}
             >
-              {role === 'investor' ? (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: registerStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 1 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 1 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
-                      1
-                    </span>
-                    <span>Contacto</span>
-                  </div>
-                  <div style={{ height: '1px', flex: 1, margin: '0 6px', background: 'var(--surface-glass-border)' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: registerStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 2 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 2 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
-                      2
-                    </span>
-                    <span>Biometría</span>
-                  </div>
-                  <div style={{ height: '1px', flex: 1, margin: '0 6px', background: 'var(--surface-glass-border)' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: registerStep >= 3 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 3 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 3 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
-                      3
-                    </span>
-                    <span>Legales</span>
-                  </div>
-                  <div style={{ height: '1px', flex: 1, margin: '0 6px', background: 'var(--surface-glass-border)' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: registerStep >= 4 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 4 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 4 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
-                      4
-                    </span>
-                    <span>Declaraciones</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: registerStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 1 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 1 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
-                      1
-                    </span>
-                    <span>Contacto</span>
-                  </div>
-                  <div style={{ height: '1px', flex: 1, margin: '0 10px', background: 'var(--surface-glass-border)' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: registerStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 2 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 2 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
-                      2
-                    </span>
-                    <span>Datos Legales</span>
-                  </div>
-                  <div style={{ height: '1px', flex: 1, margin: '0 10px', background: 'var(--surface-glass-border)' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: registerStep >= 3 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 3 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 3 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
-                      3
-                    </span>
-                    <span>Declaraciones</span>
-                  </div>
-                </>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: registerStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 1 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 1 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
+                  1
+                </span>
+                <span>{role === 'investor' ? 'Datos Personales' : 'Datos de la Empresa'}</span>
+              </div>
+              <div style={{ height: '1px', flex: 1, margin: '0 12px', background: 'var(--surface-glass-border)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: registerStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: registerStep >= 2 ? 'var(--btn-primary-bg)' : 'var(--surface-card)', color: registerStep >= 2 ? 'var(--btn-primary-text)' : 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: '11px' }}>
+                  2
+                </span>
+                <span>{role === 'investor' ? 'Biometría' : 'Confirmación'}</span>
+              </div>
             </div>
 
             <form onSubmit={handleRegisterSubmit}>
@@ -1182,30 +1432,6 @@ export const AuthPage: React.FC = () => {
                         />
                       </div>
                     </>
-                  )}
-
-                  {role === 'investor' && (
-                    <div style={{ marginBottom: '4px' }}>
-                      <GoogleAuthButton
-                        verifiedEmail={googleVerifiedEmail}
-                        onSuccess={(data) => {
-                          setGoogleVerifiedEmail(data.email);
-                          setEmail(data.email);
-                          setGoogleIdToken(data.idToken);
-                          if (!fullName && data.name) {
-                            setFullName(data.name);
-                          }
-                          setFormErrors((prev) => {
-                            const copy = { ...prev };
-                            delete copy.email;
-                            return copy;
-                          });
-                        }}
-                        onError={(err) => {
-                          setFormErrors((prev) => ({ ...prev, googleAuth: err }));
-                        }}
-                      />
-                    </div>
                   )}
 
                   <div>
@@ -1324,6 +1550,46 @@ export const AuthPage: React.FC = () => {
                     {formErrors.password && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.password}</span>}
                   </div>
 
+                  {/* Sección Google Registration - Ubicada al final de los campos de datos personales */}
+                  <div style={{ marginTop: '4px', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '14px 0 16px' }}>
+                      <div style={{ flex: 1, height: '1px', background: 'var(--surface-glass-border)' }} />
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                        O autocompletá con tu cuenta
+                      </span>
+                      <div style={{ flex: 1, height: '1px', background: 'var(--surface-glass-border)' }} />
+                    </div>
+
+                    <GoogleLoginButton
+                      text="Registrarse con Google"
+                      onSuccess={handleGoogleRegisterSuccess}
+                      onError={(err) => setFormErrors((prev) => ({ ...prev, googleAuth: err }))}
+                      isLoading={googleRegisterLoading}
+                    />
+
+                    {googleAuthNotice && (
+                      <div
+                        style={{
+                          marginTop: '8px',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          background: 'rgba(59, 130, 246, 0.08)',
+                          border: '1px solid rgba(59, 130, 246, 0.25)',
+                          color: '#60a5fa',
+                          fontSize: '11px',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {googleAuthNotice}
+                      </div>
+                    )}
+                    {formErrors.googleAuth && (
+                      <div style={{ marginTop: '6px', fontSize: '11px', color: '#ef4444' }}>
+                        {formErrors.googleAuth}
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1332,31 +1598,100 @@ export const AuthPage: React.FC = () => {
                     className="btn-primary"
                     style={{ height: '46px', marginTop: '12px', borderRadius: '10px', gap: '8px' }}
                   >
-                    <span>{role === 'investor' ? 'Continuar a Prueba de Vida' : 'Continuar a Datos Legales'}</span>
+                    <span>{role === 'investor' ? 'Continuar a Biometría' : 'Continuar a Confirmación'}</span>
                     <ArrowRight size={16} />
                   </button>
+
+                  <div style={{ textAlign: 'center', marginTop: '8px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>¿Ya tenés una cuenta? </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsLogin(true)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-primary)',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Iniciar Sesión
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {/* STEP 2 (Investor Only): Prueba de Vida Biométrica con Cámara (FaceX) */}
-              {role === 'investor' && registerStep === 2 && (
+              {/* STEP 2: Biometría (Inversor) o Confirmación (Constructora) */}
+              {registerStep === 2 && (
                 <div style={{ display: 'grid', gap: '16px' }}>
-                  <FaceLivenessVerification
-                    isVerified={!!livenessProof}
-                    onCancel={() => setRegisterStep(1)}
-                    onVerified={(proof) => {
-                      setLivenessProof(proof);
-                      setFormErrors((prev) => {
-                        const copy = { ...prev };
-                        delete copy.liveness;
-                        return copy;
-                      });
-                    }}
-                  />
+                  {role === 'investor' ? (
+                    <div>
+                      <FaceLivenessVerification
+                        isVerified={!!livenessProof}
+                        onCancel={() => setRegisterStep(1)}
+                        onVerified={(proof) => {
+                          setLivenessProof(proof);
+                          setFormErrors((prev) => {
+                            const copy = { ...prev };
+                            delete copy.liveness;
+                            return copy;
+                          });
+                        }}
+                      />
 
-                  {formErrors.liveness && (
-                    <div style={{ padding: '10px 14px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: '12px' }}>
-                      {formErrors.liveness}
+                      {formErrors.liveness && (
+                        <div style={{ marginTop: '8px', padding: '10px 14px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: '12px' }}>
+                          {formErrors.liveness}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '20px', borderRadius: '12px', background: 'var(--color-surface-raised)', border: '1px solid var(--surface-glass-border)' }}>
+                      <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '14px', color: 'var(--text-primary)' }}>
+                        Confirmación de Datos de la Constructora
+                      </h3>
+                      <div style={{ display: 'grid', gap: '10px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Razón Social: </span>
+                          <strong>{companyName}</strong>
+                        </div>
+                        {tradeName && (
+                          <div>
+                            <span style={{ color: 'var(--text-muted)' }}>Nombre Comercial: </span>
+                            <strong>{tradeName}</strong>
+                          </div>
+                        )}
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Correo Oficial: </span>
+                          <strong>{email}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Teléfono: </span>
+                          <strong>{phone}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {formErrors.general && (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid #ef4444',
+                        color: '#f87171',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                      }}
+                    >
+                      <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                      <span>{formErrors.general}</span>
                     </div>
                   )}
 
@@ -1379,653 +1714,19 @@ export const AuthPage: React.FC = () => {
                       Atrás
                     </button>
                     <button
-                      type="button"
-                      disabled={!livenessProof}
-                      onClick={() => {
-                        if (!livenessProof) {
-                          setFormErrors((prev) => ({
-                            ...prev,
-                            liveness: 'Debe completar la prueba de vida biométrica para avanzar.',
-                          }));
-                          return;
-                        }
-                        setRegisterStep(3);
-                      }}
+                      type="submit"
+                      disabled={isSubmitting || (role === 'investor' && !livenessProof)}
                       className="btn-primary"
                       style={{
                         flex: 2,
                         height: '46px',
                         borderRadius: '10px',
                         gap: '8px',
-                        opacity: livenessProof ? 1 : 0.6,
-                        cursor: livenessProof ? 'pointer' : 'not-allowed',
+                        opacity: isSubmitting || (role === 'investor' && !livenessProof) ? 0.6 : 1,
+                        cursor: isSubmitting || (role === 'investor' && !livenessProof) ? 'not-allowed' : 'pointer',
                       }}
                     >
-                      <span>Continuar a Datos Legales</span>
-                      <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP: Datos Legales e Identificación (Investor: 3, Developer: 2) */}
-              {((role === 'investor' && registerStep === 3) || (role === 'developer' && registerStep === 2)) && (
-                <div style={{ display: 'grid', gap: '16px' }}>
-                  {role === 'investor' ? (
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            DNI Argentino *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Ej: 38452109"
-                            value={dni}
-                            maxLength={8}
-                            onChange={(e) => setDni(e.target.value.replace(/\D/g, ''))}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.dni ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '14px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {formErrors.dni && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.dni}</span>}
-                        </div>
-
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            CUIL (11 dígitos) *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="20-38452109-4"
-                            value={cuil}
-                            maxLength={13}
-                            onChange={(e) => setCuil(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.cuil ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '14px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {formErrors.cuil && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.cuil}</span>}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                          Fecha de Nacimiento (Mayor de 18 años requerida por Ley) *
-                        </label>
-                        <div style={{ position: 'relative' }}>
-                          <input
-                            type="date"
-                            value={birthDate}
-                            onChange={(e) => setBirthDate(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              paddingLeft: '38px',
-                              paddingRight: '12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.birthDate ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '14px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          <Calendar size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-muted)' }} />
-                        </div>
-                        {formErrors.birthDate && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.birthDate}</span>}
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: '10px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            Domicilio Real *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Ej: Av. Libertador 4450"
-                            value={address}
-                            onChange={(e) => setAddress(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.address ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {formErrors.address && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.address}</span>}
-                        </div>
-
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            Ciudad *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Ej: CABA"
-                            value={city}
-                            onChange={(e) => setCity(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.city ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {formErrors.city && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.city}</span>}
-                        </div>
-
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            Provincia *
-                          </label>
-                          <select
-                            value={province}
-                            onChange={(e) => setProvince(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 8px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: '1px solid var(--surface-glass-border)',
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                              boxSizing: 'border-box',
-                            }}
-                          >
-                            <option value="CABA">CABA</option>
-                            <option value="Buenos Aires">Buenos Aires</option>
-                            <option value="Córdoba">Córdoba</option>
-                            <option value="Santa Fe">Santa Fe</option>
-                            <option value="Mendoza">Mendoza</option>
-                            <option value="Otra">Otra</option>
-                          </select>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    /* Desarrolladora / Constructora Legal Fields */
-                    <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            Tipo Societario (Ley 19.550) *
-                          </label>
-                          <select
-                            value={companyType}
-                            onChange={(e) => setCompanyType(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 10px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: '1px solid var(--surface-glass-border)',
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                              boxSizing: 'border-box',
-                            }}
-                          >
-                            <option value="Sociedad Anónima (S.A.)">Sociedad Anónima (S.A.)</option>
-                            <option value="Sociedad por Acciones Simplificada (S.A.S.)">Sociedad por Acciones Simplificada (S.A.S.)</option>
-                            <option value="Sociedad de Responsabilidad Limitada (S.R.L.)">Sociedad de Responsabilidad Limitada (S.R.L.)</option>
-                            <option value="Fideicomiso Inmobiliario Ordinario">Fideicomiso Inmobiliario Ordinario</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            CUIT Societario (11 dígitos) *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="30-71458923-8"
-                            value={cuit}
-                            onChange={(e) => setCuit(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.cuit ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '14px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {formErrors.cuit && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.cuit}</span>}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            Inscripción Registral (IGJ/DPPJ) *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Ej: Correlativo N° 1894234"
-                            value={registrationNumber}
-                            onChange={(e) => setRegistrationNumber(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.registrationNumber ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {formErrors.registrationNumber && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.registrationNumber}</span>}
-                        </div>
-
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>
-                            Domicilio Legal y Sede *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Ej: Av. Corrientes 1234, CABA"
-                            value={legalAddress}
-                            onChange={(e) => setLegalAddress(e.target.value)}
-                            style={{
-                              width: '100%',
-                              height: '42px',
-                              padding: '0 12px',
-                              borderRadius: '10px',
-                              background: 'var(--color-surface-raised)',
-                              border: `1px solid ${formErrors.legalAddress ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {formErrors.legalAddress && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.legalAddress}</span>}
-                        </div>
-                      </div>
-
-                      {/* Representante Legal Section */}
-                      <div
-                        style={{
-                          padding: '14px',
-                          borderRadius: '12px',
-                          background: 'var(--color-surface-raised)',
-                          border: '1px solid var(--surface-glass-border)',
-                          marginTop: '4px',
-                        }}
-                      >
-                        <span style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>
-                          Representante Legal con Poder Suficiente
-                        </span>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                          <input
-                            type="text"
-                            placeholder="Nombre del Representante"
-                            value={repFullName}
-                            onChange={(e) => setRepFullName(e.target.value)}
-                            style={{
-                              height: '38px',
-                              padding: '0 10px',
-                              borderRadius: '8px',
-                              background: 'var(--surface-card)',
-                              border: `1px solid ${formErrors.repFullName ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                            }}
-                          />
-                          <input
-                            type="text"
-                            placeholder="Cargo (ej: Presidente)"
-                            value={repRole}
-                            onChange={(e) => setRepRole(e.target.value)}
-                            style={{
-                              height: '38px',
-                              padding: '0 10px',
-                              borderRadius: '8px',
-                              background: 'var(--surface-card)',
-                              border: '1px solid var(--surface-glass-border)',
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                            }}
-                          />
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                          <input
-                            type="text"
-                            placeholder="DNI del Representante"
-                            value={repDni}
-                            maxLength={8}
-                            onChange={(e) => setRepDni(e.target.value.replace(/\D/g, ''))}
-                            style={{
-                              height: '38px',
-                              padding: '0 10px',
-                              borderRadius: '8px',
-                              background: 'var(--surface-card)',
-                              border: `1px solid ${formErrors.repDni ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                            }}
-                          />
-                          <input
-                            type="text"
-                            placeholder="CUIL del Representante"
-                            value={repCuil}
-                            onChange={(e) => setRepCuil(e.target.value)}
-                            style={{
-                              height: '38px',
-                              padding: '0 10px',
-                              borderRadius: '8px',
-                              background: 'var(--surface-card)',
-                              border: `1px solid ${formErrors.repCuil ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                              color: 'var(--text-primary)',
-                              fontSize: '13px',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setRegisterStep(role === 'investor' ? 2 : 1)}
-                      style={{
-                        flex: 1,
-                        height: '46px',
-                        borderRadius: '10px',
-                        background: 'transparent',
-                        border: '1px solid var(--surface-glass-border)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Atrás
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (validateStep2()) setRegisterStep(role === 'investor' ? 4 : 3);
-                      }}
-                      className="btn-primary"
-                      style={{ flex: 2, height: '46px', borderRadius: '10px', gap: '8px' }}
-                    >
-                      <span>Declaraciones Regulatorias</span>
-                      <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP: Declaraciones Juradas y Consentimientos (Investor: 4, Developer: 3) */}
-              {((role === 'investor' && registerStep === 4) || (role === 'developer' && registerStep === 3)) && (
-                <div style={{ display: 'grid', gap: '18px' }}>
-                  {/* Origen de fondos & PEP */}
-                  <div
-                    style={{
-                      padding: '16px',
-                      borderRadius: '14px',
-                      background: 'var(--color-surface-raised)',
-                      border: '1px solid var(--surface-glass-border)',
-                    }}
-                  >
-                    <span style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                      Prevención de Lavado de Activos (Res. UIF 49/2024)
-                    </span>
-
-                    {role === 'investor' && (
-                      <div style={{ marginBottom: '14px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                          Origen Lícito de los Fondos Declarado *
-                        </label>
-                        <select
-                          value={fundsOrigin}
-                          onChange={(e) => setFundsOrigin(e.target.value)}
-                          style={{
-                            width: '100%',
-                            height: '38px',
-                            padding: '0 10px',
-                            borderRadius: '8px',
-                            background: 'var(--surface-card)',
-                            border: '1px solid var(--surface-glass-border)',
-                            color: 'var(--text-primary)',
-                            fontSize: '13px',
-                          }}
-                        >
-                          <option value="Ahorros / Ingresos laborales">Ahorros personales / Ingresos laborales</option>
-                          <option value="Venta de Inmueble previo">Venta previa de inmueble</option>
-                          <option value="Actividad Comercial / Honorarios">Actividad comercial / Facturación independiente</option>
-                          <option value="Rentas de Inversiones">Rentas de inversiones anteriores</option>
-                          <option value="Herencia / Donación">Herencia o donación familiar</option>
-                        </select>
-                      </div>
-                    )}
-
-                    {/* PEP Selector */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid var(--surface-glass-border)' }}>
-                      <div>
-                        <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>
-                          ¿Es Persona Expuesta Políticamente (PEP)?
-                        </strong>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Conforme a nómina de cargos públicos de la Unidad de Información Financiera.
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          type="button"
-                          onClick={() => setIsPep(false)}
-                          style={{
-                            padding: '6px 14px',
-                            borderRadius: '8px',
-                            border: !isPep ? '2px solid var(--text-primary)' : '1px solid var(--surface-glass-border)',
-                            background: !isPep ? 'var(--btn-primary-bg)' : 'transparent',
-                            color: !isPep ? 'var(--btn-primary-text)' : 'var(--text-muted)',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          NO
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsPep(true)}
-                          style={{
-                            padding: '6px 14px',
-                            borderRadius: '8px',
-                            border: isPep ? '2px solid #d97706' : '1px solid var(--surface-glass-border)',
-                            background: isPep ? '#d97706' : 'transparent',
-                            color: isPep ? '#ffffff' : 'var(--text-muted)',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          SÍ
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Sujeto Obligado UIF (Inversor) */}
-                    {role === 'investor' && (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid var(--surface-glass-border)' }}>
-                        <div>
-                          <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>
-                            ¿Es Sujeto Obligado ante la UIF?
-                          </strong>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Escribano, contador, despachante, remesador o afín (Ley 25.246).
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button
-                            type="button"
-                            onClick={() => setIsObligatedSubject(false)}
-                            style={{
-                              padding: '6px 14px',
-                              borderRadius: '8px',
-                              border: !isObligatedSubject ? '2px solid var(--text-primary)' : '1px solid var(--surface-glass-border)',
-                              background: !isObligatedSubject ? 'var(--btn-primary-bg)' : 'transparent',
-                              color: !isObligatedSubject ? 'var(--btn-primary-text)' : 'var(--text-muted)',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            NO
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setIsObligatedSubject(true)}
-                            style={{
-                              padding: '6px 14px',
-                              borderRadius: '8px',
-                              border: isObligatedSubject ? '2px solid #d97706' : '1px solid var(--surface-glass-border)',
-                              background: isObligatedSubject ? '#d97706' : 'transparent',
-                              color: isObligatedSubject ? '#ffffff' : 'var(--text-muted)',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            SÍ
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {role === 'developer' && (
-                      <div style={{ paddingTop: '10px', borderTop: '1px solid var(--surface-glass-border)' }}>
-                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
-                          <input
-                            type="checkbox"
-                            checked={uboDeclared}
-                            onChange={(e) => setUboDeclared(e.target.checked)}
-                            style={{ marginTop: '2px', accentColor: 'var(--text-primary)' }}
-                          />
-                          <span style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                            Declaro contar con la constancia de Beneficiarios Finales (UBO con +10% de cuotas o acciones) lista para adjuntar en la auditoría de cada proyecto (Res. UIF 49/2024).
-                          </span>
-                        </label>
-                        {formErrors.uboDeclared && <span style={{ fontSize: '11px', color: '#ef4444', display: 'block', marginTop: '4px' }}>{formErrors.uboDeclared}</span>}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Independent Consent Checkboxes per legal.md Section 7.6 */}
-                  <div style={{ display: 'grid', gap: '12px' }}>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', fontSize: '12px' }}>
-                      <input
-                        type="checkbox"
-                        checked={termsAccepted}
-                        onChange={(e) => setTermsAccepted(e.target.checked)}
-                        style={{ marginTop: '3px', accentColor: 'var(--text-primary)' }}
-                      />
-                      <span style={{ color: 'var(--text-primary)', lineHeight: 1.45 }}>
-                        He leído y acepto los <strong style={{ textDecoration: 'underline' }}>Términos y Condiciones Generales</strong> de Krea Nova (v1.0 - 2026). *
-                      </span>
-                    </label>
-                    {formErrors.termsAccepted && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.termsAccepted}</span>}
-
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', fontSize: '12px' }}>
-                      <input
-                        type="checkbox"
-                        checked={privacyAccepted}
-                        onChange={(e) => setPrivacyAccepted(e.target.checked)}
-                        style={{ marginTop: '3px', accentColor: 'var(--text-primary)' }}
-                      />
-                      <span style={{ color: 'var(--text-primary)', lineHeight: 1.45 }}>
-                        Presto <strong style={{ textDecoration: 'underline' }}>consentimiento expreso e informado</strong> para el tratamiento de mis datos personales en los términos de la <strong>Ley 25.326</strong>. *
-                      </span>
-                    </label>
-                    {formErrors.privacyAccepted && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.privacyAccepted}</span>}
-
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', fontSize: '12px' }}>
-                      <input
-                        type="checkbox"
-                        checked={swornTruthAccepted}
-                        onChange={(e) => setSwornTruthAccepted(e.target.checked)}
-                        style={{ marginTop: '3px', accentColor: 'var(--text-primary)' }}
-                      />
-                      <span style={{ color: 'var(--text-primary)', lineHeight: 1.45 }}>
-                        Declaro bajo juramento que los datos suministrados son exactos, verídicos y se mantendrán actualizados. *
-                      </span>
-                    </label>
-                    {formErrors.swornTruthAccepted && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.swornTruthAccepted}</span>}
-
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', fontSize: '12px' }}>
-                      <input
-                        type="checkbox"
-                        checked={marketingOptIn}
-                        onChange={(e) => setMarketingOptIn(e.target.checked)}
-                        style={{ marginTop: '3px', accentColor: 'var(--text-primary)' }}
-                      />
-                      <span style={{ color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                        Deseo recibir informes periódicos del mercado inmobiliario y nuevos lanzamientos (opcional).
-                      </span>
-                    </label>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setRegisterStep(role === 'investor' ? 3 : 2)}
-                      style={{
-                        flex: 1,
-                        height: '46px',
-                        borderRadius: '10px',
-                        background: 'transparent',
-                        border: '1px solid var(--surface-glass-border)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Atrás
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      style={{ flex: 2, height: '46px', borderRadius: '10px', gap: '8px' }}
-                    >
-                      <span>Finalizar Registro y Validar</span>
+                      <span>{isSubmitting ? 'Registrando...' : 'Finalizar Registro'}</span>
                       <ShieldCheck size={16} />
                     </button>
                   </div>
@@ -2034,40 +1735,6 @@ export const AuthPage: React.FC = () => {
             </form>
           </div>
         )}
-
-        {/* Reassuring Security Badge */}
-        <div
-          style={{
-            marginTop: '24px',
-            paddingTop: '16px',
-            borderTop: '1px solid var(--surface-glass-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            color: 'var(--text-subtle)',
-            fontSize: '12px',
-          }}
-        >
-          <ShieldCheck size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          <span>Tus datos y operaciones están completamente protegidos</span>
-        </div>
-      </div>
-
-      {/* Subtle Academic Prototype Badge */}
-      <div
-        style={{
-          marginTop: '18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontSize: '11px',
-          color: 'var(--text-subtle)',
-          opacity: 0.85,
-        }}
-      >
-        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d97706' }} />
-        <span>Modo Académico Demostrativo · Operaciones y saldos simulados</span>
       </div>
     </div>
   );

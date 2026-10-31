@@ -1,0 +1,27 @@
+{
+  "op": "set",
+  "diagram": {
+    "type": "sequence",
+    "title": "Secuencia de Pago e Inversión - Krea Nova",
+    "nodes": [
+      {"id": "inv", "kind": "lifeline", "label": "Inversor"},
+      {"id": "fe", "kind": "lifeline", "label": "Frontend (React)"},
+      {"id": "be", "kind": "lifeline", "label": "Backend (Go/Gin)"},
+      {"id": "gw", "kind": "lifeline", "label": "Gateway (Mercado Pago)"},
+      {"id": "db", "kind": "lifeline", "label": "DB / Ledger (Postgres)"}
+    ],
+    "edges": [
+      {"from": "inv", "to": "fe", "label": "1. Selecciona monto y pagar"},
+      {"from": "fe", "to": "be", "label": "2. POST /api/payments/checkout"},
+      {"from": "be", "to": "gw", "label": "3. Crear preferencia / orden"},
+      {"from": "gw", "to": "be", "label": "4. init_point / preference_id", "dashed": true},
+      {"from": "be", "to": "fe", "label": "5. Retorna checkout URL", "dashed": true},
+      {"from": "inv", "to": "gw", "label": "6. Ejecuta pago en pasarela"},
+      {"from": "gw", "to": "be", "label": "7. Webhook: payment.created"},
+      {"from": "be", "to": "gw", "label": "8. GET /v1/payments/{id} (valida)"},
+      {"from": "gw", "to": "be", "label": "9. Estado: approved", "dashed": true},
+      {"from": "be", "to": "db", "label": "10. Transacción: Asignar cuotas / token"},
+      {"from": "be", "to": "fe", "label": "11. Notificación pago confirmado (SSE/WS)", "dashed": true}
+    ]
+  }
+}

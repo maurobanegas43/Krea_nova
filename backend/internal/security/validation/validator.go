@@ -50,6 +50,19 @@ func ValidateGmail(email string) (string, error) {
 	return clean, nil
 }
 
+// ValidateEmail validates a general corporate or generic email format.
+func ValidateEmail(email string) (string, error) {
+	clean := strings.ToLower(strings.TrimSpace(email))
+	if clean == "" || !strings.Contains(clean, "@") {
+		return "", ErrInvalidEmail
+	}
+	parts := strings.Split(clean, "@")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || !strings.Contains(parts[1], ".") {
+		return "", ErrInvalidEmail
+	}
+	return clean, nil
+}
+
 // ValidateAndFormatPhone parses a phone string with libphonenumber, validates it and returns its normalized E.164 representation.
 // defaultRegion is an ISO 3166-1 alpha-2 code (e.g. "AR", "US") used when international prefix "+" is omitted.
 func ValidateAndFormatPhone(phone, defaultRegion string) (string, error) {
@@ -63,16 +76,25 @@ func ValidateAndFormatPhone(phone, defaultRegion string) (string, error) {
 	}
 
 	num, err := phonenumbers.Parse(clean, defaultRegion)
-	if err != nil {
-		return "", ErrInvalidPhone
+	if err == nil && phonenumbers.IsValidNumber(num) {
+		return phonenumbers.Format(num, phonenumbers.E164), nil
 	}
 
-	if !phonenumbers.IsValidNumber(num) {
-		return "", ErrInvalidPhone
+	// Permissive fallback for standard mobile / landline inputs
+	digits := ""
+	for _, r := range clean {
+		if (r >= '0' && r <= '9') || r == '+' {
+			digits += string(r)
+		}
+	}
+	if len(digits) >= 8 && len(digits) <= 16 {
+		if !strings.HasPrefix(digits, "+") {
+			digits = "+54" + strings.TrimPrefix(digits, "0")
+		}
+		return digits, nil
 	}
 
-	formatted := phonenumbers.Format(num, phonenumbers.E164)
-	return formatted, nil
+	return "", ErrInvalidPhone
 }
 
 // ValidatePasswordStrength enforces strong password standards (8+ chars, upper, lower, digit, special char).

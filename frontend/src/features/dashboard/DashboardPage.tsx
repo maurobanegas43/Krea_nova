@@ -19,6 +19,10 @@ export const DashboardPage: React.FC = () => {
 
   const totalFunded = projects.reduce((acc, p) => acc + p.fundsRaised, 0) / 100;
   const activeOpportunities = projects.filter((p) => p.status === 'published');
+  const avgApy =
+    projects.length > 0
+      ? (projects.reduce((acc, p) => acc + (p.expectedApy || 12), 0) / projects.length).toFixed(1)
+      : '0.0';
 
   if (loading) {
     return <div className="empty">Cargando métricas de la plataforma...</div>;
@@ -51,12 +55,14 @@ export const DashboardPage: React.FC = () => {
             <span className="eyebrow">Capital Fondeado</span>
             <div className="stat__value num">${totalFunded.toLocaleString('es-AR')}</div>
             <div className="stat__delta">
-              <span className="subtle">En 3 desarrollos activos</span>
+              <span className="subtle">
+                En {activeOpportunities.length} {activeOpportunities.length === 1 ? 'desarrollo activo' : 'desarrollos activos'}
+              </span>
             </div>
           </div>
           <div className="stat">
             <span className="eyebrow">Rentabilidad Media Proyectada</span>
-            <div className="stat__value num">12.8% APY</div>
+            <div className="stat__value num">{avgApy}% APY</div>
             <div className="stat__delta">
               <span className="subtle">Renta trimestral estimada</span>
             </div>
@@ -70,9 +76,9 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="stat">
             <span className="eyebrow">Seguridad & Auditoría</span>
-            <div className="stat__value num">100% Simulado</div>
+            <div className="stat__value num">Partida Doble</div>
             <div className="stat__delta">
-              <span className="subtle">Hexagonal + Outbox Pattern</span>
+              <span className="subtle">Hexagonal + Libro Mayor</span>
             </div>
           </div>
         </div>
@@ -140,7 +146,7 @@ export const DashboardPage: React.FC = () => {
                         Avance de obra declarado: <strong>{p.progress}%</strong>
                       </span>
                       <Link to={`/app/projects/${p.id}`} className="btn btn--secondary btn--sm">
-                        Simular Inversión
+                        Ver Oportunidad
                       </Link>
                     </div>
                   </div>
@@ -196,8 +202,13 @@ export const DashboardPage: React.FC = () => {
               </Link>
             </div>
             <div className="card__body" style={{ padding: 0 }}>
-              <div style={{ display: 'grid' }}>
-                {ledger.slice(0, 4).map((entry) => {
+              {ledger.length === 0 ? (
+                <div style={{ padding: 'var(--space-5)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+                  Sin movimientos contables registrados aún
+                </div>
+              ) : (
+                <div style={{ display: 'grid' }}>
+                  {ledger.slice(0, 4).map((entry) => {
                   const isPositive = entry.amount > 0;
                   return (
                     <div
@@ -237,6 +248,7 @@ export const DashboardPage: React.FC = () => {
                   );
                 })}
               </div>
+              )}
             </div>
           </div>
         </div>

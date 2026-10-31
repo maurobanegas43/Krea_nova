@@ -17,4 +17,10 @@ type UserRepository interface {
 	UpdateKYCStatus(ctx context.Context, userID string, status user.KYCStatus) error
 
 	SaveLegalConsent(ctx context.Context, consent *user.LegalConsent) error
+
+	// Trusted Devices management
+	SaveTrustedDevice(ctx context.Context, device *user.TrustedDevice) error
+	FindTrustedDevice(ctx context.Context, userID, deviceID string) (*user.TrustedDevice, error)
+	ListTrustedDevices(ctx context.Context, userID string) ([]*user.TrustedDevice, error)
+	RevokeTrustedDevice(ctx context.Context, userID, deviceID string) error
 }

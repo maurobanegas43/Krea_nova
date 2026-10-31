@@ -103,6 +103,9 @@ export function validatePassword(password: string): { isValid: boolean; message?
   if (!/[0-9]/.test(password)) {
     return { isValid: false, message: 'La contraseña debe incluir al menos un número.' };
   }
+  if (!/[!@#$%^&*(),.?":{}|<>\-_=+]/.test(password)) {
+    return { isValid: false, message: 'La contraseña debe incluir al menos un símbolo o caracter especial (ej. !, @, #, $, _).' };
+  }
   return { isValid: true };
 }
 

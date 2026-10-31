@@ -936,43 +936,13 @@ export const FaceLivenessVerification: React.FC<FaceLivenessVerificationProps> =
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
-                  {metrics.currentChallenge === 'gesture' ? (
-                    <button
-                      type="button"
-                      onClick={() => adapterRef.current.confirmGesture()}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#fbbf24',
-                        textDecoration: 'underline',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                    >
-                      Confirmar giro
-                    </button>
-                  ) : metrics.currentChallenge === 'blink' ? (
-                    <button
-                      type="button"
-                      onClick={() => adapterRef.current.registerBlink()}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#34d399',
-                        textDecoration: 'underline',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                    >
-                      Registrar parpadeo ({metrics.blinkCount}/{metrics.targetBlinks})
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Mantén la vista al frente</span>
-                  )}
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {metrics.currentChallenge === 'gesture'
+                      ? 'Gira lentamente la cabeza hacia la derecha'
+                      : metrics.currentChallenge === 'blink'
+                      ? `Parpadea frente a la cámara (${metrics.blinkCount}/${metrics.targetBlinks})`
+                      : 'Mantén la vista al frente'}
+                  </span>
 
                   <button
                     type="button"

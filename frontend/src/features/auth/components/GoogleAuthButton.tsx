@@ -151,21 +151,6 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
 
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <div ref={buttonContainerRef} className="min-h-[40px] flex items-center" />
-
-        {/* Fallback demo button for local development */}
-        <button
-          type="button"
-          onClick={() => {
-            onSuccess({
-              email: 'inversor.verificado@gmail.com',
-              name: 'Inversor Calificado',
-              idToken: 'mock-google-id-token-dev',
-            });
-          }}
-          className="text-[11px] text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600 px-3 py-2 rounded-lg transition-colors whitespace-nowrap bg-slate-800/40"
-        >
-          Simular validación Google (Dev)
-        </button>
       </div>
 
       {errorMessage && (

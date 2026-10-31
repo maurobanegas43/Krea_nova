@@ -1,0 +1,509 @@
+/* ==========================================================================
+   PortfolioPage Stylesheet — Clean, Data-First Fintech Interface (Inter)
+   Clear Hierarchy, Subtle Borders, High Contrast
+   ========================================================================== */
+
+.portfolio-root {
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  max-width: 1200px;
+  margin-inline: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 80px;
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   1. Encabezado limpio: solo título y botones de acción
+   -------------------------------------------------------------------------- */
+.portfolio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.portfolio-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.portfolio-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Botones principales
+   -------------------------------------------------------------------------- */
+.portfolio-btn {
+  appearance: none;
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 10px 20px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.portfolio-btn--primary {
+  background: var(--btn-primary-bg, #ffffff);
+  color: var(--btn-primary-text, #09090b);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.portfolio-btn--primary:hover:not(:disabled) {
+  background: var(--btn-primary-hover, #f4f4f5);
+  transform: translateY(-1px);
+}
+
+.portfolio-btn--secondary {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-primary);
+}
+
+.portfolio-btn--secondary:hover:not(:disabled) {
+  background: var(--surface-card-hover);
+  border-color: var(--text-muted);
+}
+
+.portfolio-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.portfolio-btn--sm {
+  padding: 6px 14px;
+  font-size: 13px;
+  min-height: 34px;
+  border-radius: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   2. Cuatro indicadores principales (KPIs)
+   -------------------------------------------------------------------------- */
+.portfolio-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.portfolio-kpi-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 16px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: var(--shadow-card);
+}
+
+.portfolio-kpi-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.portfolio-kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.portfolio-kpi-value.negative {
+  color: #ef4444;
+}
+
+.portfolio-kpi-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.portfolio-kpi-badge.available {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.portfolio-kpi-badge.warning {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.portfolio-kpi-subtext {
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  line-height: 1.35;
+}
+
+/* --------------------------------------------------------------------------
+   3. Distribución de inversiones (Gráfico circular con leyenda simple)
+   -------------------------------------------------------------------------- */
+.portfolio-diversification-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.portfolio-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.portfolio-donut-layout {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.portfolio-donut-wrapper {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.portfolio-donut-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.portfolio-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.portfolio-donut-center__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.portfolio-donut-center__value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+/* Leyenda simple en formato lista: Proyecto — Monto invertido — Porcentaje */
+.portfolio-donut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.portfolio-donut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--color-surface-raised);
+  border-radius: 8px;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.portfolio-donut-row__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.portfolio-donut-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.portfolio-donut-row__name {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.portfolio-donut-row__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.portfolio-donut-row__amount {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.portfolio-donut-row__sep {
+  color: var(--text-subtle);
+}
+
+.portfolio-donut-row__percent {
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 44px;
+  text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   4. Pestañas de navegación de tablas
+   -------------------------------------------------------------------------- */
+.portfolio-tabs {
+  display: inline-flex;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.portfolio-tab-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.portfolio-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.portfolio-tab-btn.active {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* --------------------------------------------------------------------------
+   5. Tabla de inversiones simplificada
+   -------------------------------------------------------------------------- */
+.portfolio-table-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.portfolio-table-container {
+  overflow-x: auto;
+}
+
+.portfolio-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+
+.portfolio-table th {
+  padding: 14px 20px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--table-head-bg);
+  border-bottom: 1px solid var(--table-border);
+  white-space: nowrap;
+}
+
+.portfolio-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--table-border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.portfolio-table tr:last-child td {
+  border-bottom: none;
+}
+
+.portfolio-table tr:hover td {
+  background: var(--surface-card-hover);
+}
+
+/* --------------------------------------------------------------------------
+   6. Drawer lateral para Depositar y Retirar
+   -------------------------------------------------------------------------- */
+.portfolio-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  animation: pdrawer-fade-in 200ms ease;
+}
+
+@keyframes pdrawer-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.portfolio-drawer {
+  width: min(460px, 100vw);
+  height: 100%;
+  background: var(--surface-card);
+  border-left: 1px solid var(--surface-glass-border);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  animation: pdrawer-slide-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pdrawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.portfolio-drawer__header {
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--surface-glass-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.portfolio-drawer__title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.portfolio-drawer__close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  transition: all var(--transition-fast);
+}
+
+.portfolio-drawer__close:hover {
+  background: var(--color-surface-raised);
+  color: var(--text-primary);
+}
+
+.portfolio-drawer__tabs {
+  display: flex;
+  padding: 12px 24px 0;
+  gap: 8px;
+  border-bottom: 1px solid var(--surface-glass-border);
+}
+
+.portfolio-drawer__tab-btn {
+  flex: 1;
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.portfolio-drawer__tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.portfolio-drawer__tab-btn.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+}
+
+.portfolio-drawer__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.portfolio-drawer__footer {
+  padding: 18px 24px;
+  border-top: 1px solid var(--surface-glass-border);
+  background: var(--color-surface-raised);
+}

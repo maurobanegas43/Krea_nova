@@ -39,6 +39,14 @@
   --brand-emerald: #10b981;
   --brand-emerald-subtle: rgba(16, 185, 129, 0.12);
 
+  /* Professional Fintech Data Visualization Tokens (Asset Allocation) */
+  --viz-1: #3b82f6; /* Sapphire Blue */
+  --viz-2: #d97706; /* Warm Gold */
+  --viz-3: #0d9488; /* Deep Teal */
+  --viz-4: #ea580c; /* Terracotta / Brick */
+  --viz-5: #8b5cf6; /* Amethyst / Indigo */
+  --viz-6: #64748b; /* Slate Steel */
+
   /* Same building image: Cinematic night styling in dark mode */
   --banner-img: url("https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=2000&q=80");
   --banner-overlay: linear-gradient(to top, #09090b 8%, rgba(9, 9, 11, 0.35) 60%, rgba(9, 9, 11, 0.75) 100%);
@@ -47,8 +55,8 @@
   /* Dashboard variables */
   --color-bg: #09090b;
   --color-surface: #121215;
-  --color-surface-raised: #18181b;
-  --color-surface-hover: #222226;
+  --color-surface-raised: #1e1e23;
+  --color-surface-hover: #26262b;
   --color-border: #27272a;
   --color-border-strong: #3f3f46;
   --color-text: #fafafa;
@@ -111,8 +119,8 @@
   /* Dashboard variables in light */
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
-  --color-surface-hover: #f1f5f9;
+  --color-surface-raised: #f1f5f9;
+  --color-surface-hover: #e2e8f0;
   --color-border: #e2e8f0;
   --color-border-strong: #cbd5e1;
   --color-text: #09090b;

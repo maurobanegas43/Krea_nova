@@ -1,0 +1,132 @@
+{
+  "op": "set",
+  "diagram": {
+    "type": "er",
+    "title": "Modelo Entidad-Relación - PostgreSQL Krea Nova",
+    "nodes": [
+      {
+        "id": "users",
+        "kind": "entity",
+        "label": "users (Identidad)",
+        "attrs": ["id (PK, varchar)", "email (unique)", "phone", "password_hash", "role (investor|dev|admin)", "user_type (ind|corp)", "is_active", "created_at"],
+        "x": 60,
+        "y": 420,
+        "w": 230
+      },
+      {
+        "id": "investor_profiles",
+        "kind": "entity",
+        "label": "investor_profiles",
+        "attrs": ["id (PK)", "user_id (FK, unique)", "full_name", "dni_encrypted (AES)", "cuil_encrypted (AES)", "birth_date", "funds_origin", "kyc_status", "verified_at"],
+        "x": 60,
+        "y": 60,
+        "w": 230
+      },
+      {
+        "id": "developer_profiles",
+        "kind": "entity",
+        "label": "developer_profiles",
+        "attrs": ["id (PK)", "user_id (FK, unique)", "company_name", "cuit (unique)", "company_type", "rep_full_name", "ubo_declared", "verification_status"],
+        "x": 60,
+        "y": 760,
+        "w": 230
+      },
+      {
+        "id": "trusted_devices",
+        "kind": "entity",
+        "label": "trusted_devices",
+        "attrs": ["id (PK)", "user_id (FK)", "device_id", "device_name", "fingerprint", "ip_address", "is_active", "last_used_at"],
+        "x": 60,
+        "y": 1040,
+        "w": 230
+      },
+      {
+        "id": "legal_consents",
+        "kind": "entity",
+        "label": "legal_consents",
+        "attrs": ["id (PK)", "user_id (FK)", "consent_type", "document_version", "document_hash", "ip_address", "accepted_at"],
+        "x": 420,
+        "y": 60,
+        "w": 230
+      },
+      {
+        "id": "payments",
+        "kind": "entity",
+        "label": "payments",
+        "attrs": ["id (PK)", "user_id (FK)", "provider (MP|Stripe)", "external_id", "amount_cents", "currency", "status", "idempotency_key"],
+        "x": 420,
+        "y": 320,
+        "w": 230
+      },
+      {
+        "id": "investments",
+        "kind": "entity",
+        "label": "investments",
+        "attrs": ["id (PK)", "project_id (FK)", "investor_id (FK)", "amount_cents", "status", "created_at"],
+        "x": 420,
+        "y": 580,
+        "w": 230
+      },
+      {
+        "id": "projects",
+        "kind": "entity",
+        "label": "projects (Activos RWA)",
+        "attrs": ["id (PK)", "developer_id (FK)", "name", "funding_goal", "funds_raised", "progress", "token_symbol", "expected_apy", "status"],
+        "x": 420,
+        "y": 800,
+        "w": 230
+      },
+      {
+        "id": "ledger_accounts",
+        "kind": "entity",
+        "label": "ledger_accounts",
+        "attrs": ["id (PK)", "user_id (FK)", "account_type", "currency", "is_active", "created_at"],
+        "x": 780,
+        "y": 240,
+        "w": 230
+      },
+      {
+        "id": "ledger_entries",
+        "kind": "entity",
+        "label": "ledger_entries (Partida Doble)",
+        "attrs": ["id (PK)", "account_id (FK)", "transaction_group_id", "entry_type (DEBIT|CREDIT)", "amount_cents", "description", "created_at"],
+        "x": 780,
+        "y": 480,
+        "w": 240
+      },
+      {
+        "id": "market_orders",
+        "kind": "entity",
+        "label": "secondary_market_orders",
+        "attrs": ["id (PK)", "project_id (FK)", "user_id (FK)", "order_type (buy|sell)", "token_count", "price_per_token_cents", "status"],
+        "x": 780,
+        "y": 760,
+        "w": 240
+      },
+      {
+        "id": "market_trades",
+        "kind": "entity",
+        "label": "secondary_market_trades",
+        "attrs": ["id (PK)", "buy_order_id (FK)", "sell_order_id (FK)", "token_count", "price_per_token_cents", "total_amount_cents", "executed_at"],
+        "x": 780,
+        "y": 1020,
+        "w": 240
+      }
+    ],
+    "edges": [
+      {"from": "users", "to": "investor_profiles", "label": "1 : 0..1"},
+      {"from": "users", "to": "developer_profiles", "label": "1 : 0..1"},
+      {"from": "users", "to": "trusted_devices", "label": "1 : N"},
+      {"from": "users", "to": "legal_consents", "label": "1 : N"},
+      {"from": "users", "to": "payments", "label": "1 : N"},
+      {"from": "users", "to": "investments", "label": "1 : N (inversor)"},
+      {"from": "users", "to": "ledger_accounts", "label": "1 : N (billetera)"},
+      {"from": "users", "to": "market_orders", "label": "1 : N"},
+      {"from": "projects", "to": "developer_profiles", "label": "N : 1"},
+      {"from": "projects", "to": "investments", "label": "1 : N"},
+      {"from": "projects", "to": "market_orders", "label": "1 : N"},
+      {"from": "ledger_accounts", "to": "ledger_entries", "label": "1 : N (asientos)"},
+      {"from": "market_orders", "to": "market_trades", "label": "1 : N (match)"}
+    ]
+  }
+}

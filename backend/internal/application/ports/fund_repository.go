@@ -20,4 +20,6 @@ type FundRepository interface {
 	// RecordTransaction writes paired debit/credit entries atomically under ACID guarantees.
 	RecordTransaction(ctx context.Context, entries []fund.LedgerEntry) error
 	GetAccountBalance(ctx context.Context, accountID string) (int64, error)
+	ListLedgerEntriesByAccount(ctx context.Context, accountID string) ([]fund.LedgerEntry, error)
+	GetFiduciaryAccount(ctx context.Context) (*fund.FiduciaryAccount, error)
 }

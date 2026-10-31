@@ -1,0 +1,336 @@
+/* ==========================================================================
+   ProjectCard — Component Styles (Unified Inter Sans-Serif)
+   420px Hero Image, High Contrast, Compact Hierarchy & Full-Width CTA
+   ========================================================================== */
+
+.project-card {
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid var(--surface-glass-border, rgba(255, 255, 255, 0.1));
+  background: var(--surface-card, #18181b);
+  box-shadow: var(--shadow-card, 0 4px 20px rgba(0, 0, 0, 0.35));
+  transition: transform var(--transition-fast, 150ms ease), border-color var(--transition-fast, 150ms ease);
+}
+
+.project-card:hover {
+  border-color: var(--surface-glass-border-hover, rgba(255, 255, 255, 0.22));
+  transform: translateY(-2px);
+}
+
+/* --------------------------------------------------------------------------
+   1. Imagen Protagonista (420px escritorio, max 500px, 280px móvil)
+   -------------------------------------------------------------------------- */
+.project-card__image-container {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  max-height: 500px;
+  overflow: hidden;
+  background: #121215;
+}
+
+@media (max-width: 640px) {
+  .project-card__image-container {
+    height: 280px;
+  }
+}
+
+.project-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  transition: transform 300ms ease;
+}
+
+.project-card:hover .project-card__image {
+  transform: scale(1.02);
+}
+
+.project-card__image-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(9, 9, 11, 0.35) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   Solo acceso a fotos sobre la imagen (arriba a la izquierda)
+   -------------------------------------------------------------------------- */
+.project-card__badges {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+}
+
+.project-card__badge-photos {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.project-card__badge-photos:hover {
+  background: rgba(24, 24, 27, 0.95);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   2. Cuerpo de la tarjeta (Flujo natural y continuo)
+   -------------------------------------------------------------------------- */
+.project-card__body {
+  padding: 24px;
+  padding-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--surface-card, #18181b);
+}
+
+/* Encabezado: Título, ubicación y rendimiento */
+.project-card__header-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-card__title {
+  font-family: inherit;
+  font-size: clamp(22px, 2vw, 26px);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-primary, #fafafa);
+  margin: 0;
+  word-break: break-word;
+}
+
+.project-card__title-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--transition-fast, 150ms ease);
+}
+
+.project-card__title-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.project-card__location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  font-weight: 400;
+  color: var(--text-muted, #a1a1aa);
+  line-height: 1.4;
+}
+
+.project-card__location-icon {
+  color: var(--text-muted, #a1a1aa);
+  flex-shrink: 0;
+}
+
+/* Rendimiento anual estimado: fuera de la imagen, debajo de la ubicación */
+.project-card__yield {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.project-card__yield-val {
+  font-weight: 700;
+  color: #10b981;
+}
+
+.project-card__yield-label {
+  font-weight: 500;
+  color: var(--text-muted, #a1a1aa);
+}
+
+/* Metadatos: Empresa y descripción */
+.project-card__meta-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-card__developer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary, #fafafa);
+  white-space: nowrap;
+}
+
+.project-card__developer-verified {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.project-card__description {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-secondary, #d4d4d8);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   3. Bloque de financiamiento: Financiado + barra + importes
+   -------------------------------------------------------------------------- */
+.project-card__funding {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-card__funding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.project-card__funding-label {
+  color: var(--text-muted, #a1a1aa);
+  font-weight: 500;
+}
+
+.project-card__funding-percentage {
+  color: var(--text-primary, #fafafa);
+  font-weight: 600;
+  font-size: 14.5px;
+  white-space: nowrap;
+}
+
+.project-card__progress-track {
+  height: 8px;
+  width: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.project-card__progress-fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: inherit;
+  transition: width 400ms ease;
+}
+
+.project-card__funding-amounts {
+  font-size: 13px;
+  color: var(--text-muted, #a1a1aa);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.project-card__funding-unavailable {
+  font-size: 13px;
+  color: var(--text-muted, #a1a1aa);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+/* --------------------------------------------------------------------------
+   4. Bloque de tokens: Precio por token y Disponibles
+   -------------------------------------------------------------------------- */
+.project-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--color-surface-raised, #1c1c20);
+  border: 1px solid var(--surface-glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+}
+
+.project-card__metric-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.project-card__metric-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted, #a1a1aa);
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.project-card__metric-value {
+  display: block;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary, #fafafa);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+/* --------------------------------------------------------------------------
+   5. Botón principal (Ancho completo 100%, 48px de alto, 16px sobre tokens)
+   -------------------------------------------------------------------------- */
+.project-card__cta-btn {
+  appearance: none;
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  background: var(--btn-primary-bg, #ffffff);
+  color: var(--btn-primary-text, #09090b);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.project-card__cta-btn:hover {
+  background: var(--btn-primary-hover, #f4f4f5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.project-card__cta-btn:focus-visible {
+  outline: 2px solid var(--btn-primary-bg);
+  outline-offset: 2px;
+}

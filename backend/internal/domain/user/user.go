@@ -90,20 +90,30 @@ func NewUser(id, email, phone, passwordHash string, role Role, uType UserType, n
 
 // InvestorProfile contains PII stored strictly in encrypted form.
 type InvestorProfile struct {
-	ID                 string
-	UserID             string
-	FullName           string
-	DNIEncrypted       string // AES-256-GCM encrypted
-	CUILEncrypted      string // AES-256-GCM encrypted
-	BirthDate          string // YYYY-MM-DD
-	AddressEncrypted   string // AES-256-GCM encrypted
-	City               string
-	Province           string
-	FundsOrigin        string
-	IsPEP              bool
-	IsObligatedSubject bool
-	KYCStatus          KYCStatus
-	VerifiedAt         *time.Time
+	ID                       string
+	UserID                   string
+	FullName                 string
+	DNIEncrypted             string // AES-256-GCM encrypted
+	CUILEncrypted            string // AES-256-GCM encrypted
+	BirthDate                string // YYYY-MM-DD
+	AddressEncrypted         string // AES-256-GCM encrypted
+	City                     string
+	Province                 string
+	FundsOrigin              string
+	IsPEP                    bool
+	IsObligatedSubject       bool
+	KYCStatus                KYCStatus
+	VerifiedAt               *time.Time
+	Phone                    string
+	PayoutCurrency           string
+	BankCbuOrAlias           string
+	BankName                 string
+	Web3WalletAddress        string
+	AutoReinvestYield        bool
+	TwoFactorEnabled         bool
+	NotifyConstructionAlerts bool
+	NotifyAuditReports       bool
+	NotifyEarlyAccess        bool
 }
 
 // DeveloperProfile represents legal entities sponsoring projects.

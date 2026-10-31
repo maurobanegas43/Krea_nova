@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { api } from '../../services/api';
 
 export type UserRole = 'investor' | 'developer' | 'admin';
 export type UserType = 'individual' | 'corporate';
@@ -8,6 +9,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: UserRole;
   userType: UserType;
   taxId?: string; // DNI, CUIL or CUIT
@@ -21,11 +23,34 @@ export interface User {
   googleVerified?: boolean;
   termsAcceptedAt: string;
   privacyAcceptedAt: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  birthDate?: string;
+  fundsOrigin?: string;
+  isObligatedSubject?: boolean;
+  // Financial & Operational Preferences
+  payoutCurrency?: 'USD' | 'ARS' | 'USDT';
+  bankCbuOrAlias?: string;
+  bankName?: string;
+  web3WalletAddress?: string;
+  autoReinvestYield?: boolean;
+  // Security & Notifications
+  twoFactorEnabled?: boolean;
+  notifyConstructionAlerts?: boolean;
+  notifyAuditReports?: boolean;
+  notifyEarlyAccess?: boolean;
+  trustedDevice?: {
+    deviceId: string;
+    deviceName: string;
+    trustedAt: string;
+  };
 }
 
 interface RegisterInvestorPayload {
   fullName: string;
   email: string;
+  password: string;
   phone: string;
   dni: string;
   cuil: string;
@@ -57,6 +82,7 @@ interface RegisterCorporatePayload {
   repDni: string;
   repCuil: string;
   email: string;
+  password: string;
   phone: string;
   isPep: boolean;
   uboDeclared: boolean;
@@ -66,9 +92,11 @@ interface RegisterCorporatePayload {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, role?: UserRole, extra?: Partial<User>) => void;
-  registerInvestor: (payload: RegisterInvestorPayload) => void;
-  registerCorporate: (payload: RegisterCorporatePayload) => void;
+  login: (email: string, password?: string, role?: UserRole, extra?: Partial<User>) => Promise<void>;
+  loginWithGoogle: (backendUser: any) => Promise<void>;
+  registerInvestor: (payload: RegisterInvestorPayload) => Promise<void>;
+  registerCorporate: (payload: RegisterCorporatePayload) => Promise<void>;
+  updateUser: (updated: Partial<User>) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -76,12 +104,68 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Always start unauthenticated by default so fresh visits are public
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem('kn_auth_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  const login = (email: string, role: UserRole = 'investor', extra?: Partial<User>) => {
+  const loginWithGoogle = async (backendUser: any) => {
     const newUser: User = {
-      id: extra?.id || 'usr-' + Math.random().toString(36).substring(2, 7),
+      id: backendUser.id,
+      name: backendUser.name || backendUser.email.split('@')[0].toUpperCase(),
+      email: backendUser.email,
+      role: (backendUser.role as UserRole) || 'investor',
+      userType: (backendUser.userType as UserType) || 'individual',
+      taxId: backendUser.taxId,
+      legalName: backendUser.name,
+      kycStatus: backendUser.kycStatus || 'verified',
+      isKycVerified: backendUser.isKycVerified ?? true,
+      googleVerified: true,
+      pepDeclared: false,
+      termsAcceptedAt: new Date().toISOString(),
+      privacyAcceptedAt: new Date().toISOString(),
+      trustedDevice: backendUser.trustedDevice,
+    };
+    setUser(newUser);
+    localStorage.setItem('kn_auth_user', JSON.stringify(newUser));
+  };
+
+  const login = async (email: string, password?: string, role: UserRole = 'investor', extra?: Partial<User>) => {
+    if (password) {
+      try {
+        const backendUser = await api.login(email, password);
+        const newUser: User = {
+          id: backendUser.id,
+          name: backendUser.name || email.split('@')[0].toUpperCase(),
+          email: backendUser.email,
+          role: (backendUser.role as UserRole) || role,
+          userType: (backendUser.userType as UserType) || (role === 'developer' ? 'corporate' : 'individual'),
+          taxId: backendUser.taxId || extra?.taxId,
+          legalName: extra?.legalName || backendUser.name,
+          companyType: extra?.companyType,
+          legalRepresentative: extra?.legalRepresentative,
+          kycStatus: backendUser.kycStatus || 'verified',
+          isKycVerified: backendUser.isKycVerified ?? true,
+          pepDeclared: false,
+          termsAcceptedAt: new Date().toISOString(),
+          privacyAcceptedAt: new Date().toISOString(),
+          ...extra,
+        };
+        setUser(newUser);
+        localStorage.setItem('kn_auth_user', JSON.stringify(newUser));
+        return;
+      } catch (err) {
+        throw err;
+      }
+    }
+
+    // Direct developer profile selection or demo fallback with real DB ID
+    const newUser: User = {
+      id: extra?.id || 'usr-investor-01',
       name: extra?.name || email.split('@')[0].toUpperCase(),
       email,
       role,
@@ -98,50 +182,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...extra,
     };
     setUser(newUser);
+    localStorage.setItem('kn_auth_user', JSON.stringify(newUser));
   };
 
-  const registerInvestor = (payload: RegisterInvestorPayload) => {
-    const newUser: User = {
-      id: 'inv-' + Math.random().toString(36).substring(2, 8),
-      name: payload.fullName,
-      email: payload.email,
-      role: 'investor',
-      userType: 'individual',
-      taxId: payload.cuil || payload.dni,
-      legalName: payload.fullName,
-      kycStatus: 'verified', // Simulation: auto-verified for prototype
-      isKycVerified: true,
-      pepDeclared: payload.isPep,
-      livenessVerified: payload.livenessVerified ?? true,
-      googleVerified: !!payload.googleIdToken,
-      termsAcceptedAt: new Date().toISOString(),
-      privacyAcceptedAt: new Date().toISOString(),
-    };
-    setUser(newUser);
+  const registerInvestor = async (payload: RegisterInvestorPayload) => {
+    try {
+      const persistedUser = await api.registerInvestor(payload);
+      const newUser: User = {
+        id: persistedUser.id,
+        name: persistedUser.name,
+        email: persistedUser.email,
+        role: 'investor',
+        userType: 'individual',
+        taxId: persistedUser.taxId,
+        legalName: payload.fullName,
+        kycStatus: persistedUser.kycStatus || 'verified',
+        isKycVerified: persistedUser.isKycVerified ?? true,
+        pepDeclared: payload.isPep,
+        livenessVerified: payload.livenessVerified ?? true,
+        googleVerified: !!payload.googleIdToken,
+        termsAcceptedAt: new Date().toISOString(),
+        privacyAcceptedAt: new Date().toISOString(),
+      };
+      setUser(newUser);
+      localStorage.setItem('kn_auth_user', JSON.stringify(newUser));
+    } catch (err) {
+      console.error('Registration failed:', err);
+      throw err;
+    }
   };
 
-  const registerCorporate = (payload: RegisterCorporatePayload) => {
-    const newUser: User = {
-      id: 'dev-' + Math.random().toString(36).substring(2, 8),
-      name: payload.tradeName || payload.companyName,
-      email: payload.email,
-      role: 'developer',
-      userType: 'corporate',
-      taxId: payload.cuit,
-      legalName: payload.companyName,
-      companyType: payload.companyType,
-      legalRepresentative: payload.repFullName,
-      kycStatus: 'verified', // Simulation: auto-verified for prototype
-      isKycVerified: true,
-      pepDeclared: payload.isPep,
-      termsAcceptedAt: new Date().toISOString(),
-      privacyAcceptedAt: new Date().toISOString(),
-    };
-    setUser(newUser);
+  const registerCorporate = async (payload: RegisterCorporatePayload) => {
+    try {
+      const persistedUser = await api.registerCorporate(payload);
+      const newUser: User = {
+        id: persistedUser.id,
+        name: persistedUser.name,
+        email: persistedUser.email,
+        role: 'developer',
+        userType: 'corporate',
+        taxId: persistedUser.taxId,
+        legalName: payload.companyName,
+        companyType: payload.companyType,
+        legalRepresentative: payload.repFullName,
+        kycStatus: persistedUser.kycStatus || 'verified',
+        isKycVerified: true,
+        pepDeclared: payload.isPep,
+        termsAcceptedAt: new Date().toISOString(),
+        privacyAcceptedAt: new Date().toISOString(),
+      };
+      setUser(newUser);
+      localStorage.setItem('kn_auth_user', JSON.stringify(newUser));
+    } catch (err) {
+      console.error('Corporate registration failed:', err);
+      throw err;
+    }
   };
 
   const logout = () => {
     setUser(null);
+    localStorage.removeItem('kn_auth_user');
+  };
+
+  const updateUser = (updated: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const next = { ...prev, ...updated };
+      try {
+        localStorage.setItem('kn_auth_user', JSON.stringify(next));
+      } catch (e) {
+        console.error('Error saving updated user to localStorage:', e);
+      }
+      return next;
+    });
   };
 
   return (
@@ -149,8 +262,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         login,
+        loginWithGoogle,
         registerInvestor,
         registerCorporate,
+        updateUser,
         logout,
         isAuthenticated: !!user,
       }}

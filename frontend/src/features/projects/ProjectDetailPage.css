@@ -1,0 +1,846 @@
+/* ==========================================================================
+   ProjectDetailPage — Stylesheet (Unified Modern Inter Typography)
+   Full Dark / Light Theme Support via CSS Variables
+   Optimized Proportions & Refined Font Scaling
+   ========================================================================== */
+
+.pdetail-root {
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  max-width: 1200px;
+  margin-inline: auto;
+  width: 100%;
+  padding-bottom: 80px;
+}
+
+/* --------------------------------------------------------------------------
+   Top Navigation & Header
+   -------------------------------------------------------------------------- */
+.pdetail-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pdetail-title-block {
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdetail-title {
+  font-size: clamp(1.6rem, 2.5vw, 2.1rem);
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.pdetail-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.pdetail-sep {
+  opacity: 0.4;
+  margin: 0 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Top Row: Photo Gallery (Left) & Token Acquisition (Right)
+   Desktop: ~420px width for purchase card, unforced natural height
+   -------------------------------------------------------------------------- */
+.pdetail-top-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 28px;
+  align-items: start;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 960px) {
+  .pdetail-top-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Full-Width Lower Section (Occupies Full Combined Width)
+   -------------------------------------------------------------------------- */
+.pdetail-full-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Card Foundations (Theme-Aware, Light & Dark)
+   -------------------------------------------------------------------------- */
+.pdetail-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  color: var(--text-primary);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.pdetail-card--padded {
+  padding: clamp(18px, 2.5vw, 24px);
+}
+
+/* --------------------------------------------------------------------------
+   1. Photo Gallery Component (Image adapts to container)
+   -------------------------------------------------------------------------- */
+.pdetail-gallery-card {
+  display: flex;
+  flex-direction: column;
+  height: 480px;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+@media (max-width: 960px) {
+  .pdetail-gallery-card {
+    height: 350px;
+  }
+}
+
+.pdetail-gallery-viewer {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+
+@media (max-width: 960px) {
+  .pdetail-gallery-viewer {
+    min-height: 260px;
+  }
+}
+
+.pdetail-gallery-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.pdetail-gallery-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.1) 40%, transparent 100%);
+  pointer-events: none;
+}
+
+.pdetail-gallery-badges {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  z-index: 2;
+}
+
+.pdetail-category-badge {
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fafafa;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pdetail-counter-badge {
+  background: rgba(9, 9, 11, 0.7);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.pdetail-fullscreen-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(9, 9, 11, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fafafa;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 2;
+  transition: all var(--transition-fast);
+}
+
+.pdetail-fullscreen-btn:hover {
+  background: rgba(24, 24, 27, 0.95);
+  transform: scale(1.05);
+}
+
+.pdetail-gallery-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(9, 9, 11, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fafafa;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 2;
+  transition: all var(--transition-fast);
+}
+
+.pdetail-gallery-nav-btn:hover {
+  background: rgba(24, 24, 27, 0.95);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.pdetail-gallery-nav-btn.prev {
+  left: 14px;
+}
+
+.pdetail-gallery-nav-btn.next {
+  right: 14px;
+}
+
+.pdetail-caption-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  right: 14px;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  z-index: 2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pdetail-thumbnails {
+  height: 56px;
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  background: var(--surface-card);
+  border-top: 1px solid var(--surface-glass-border);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.pdetail-thumb-btn {
+  width: 62px;
+  height: 38px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  background: var(--bg-deep);
+  transition: all var(--transition-fast);
+  opacity: 0.65;
+}
+
+.pdetail-thumb-btn.active {
+  border-color: var(--brand-gold, #d4af37);
+  opacity: 1;
+  transform: scale(1.02);
+}
+
+.pdetail-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* --------------------------------------------------------------------------
+   Purchase Card (Streamlined, Inter Sans-Serif, Natural Height)
+   -------------------------------------------------------------------------- */
+.pdetail-purchase-card {
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .pdetail-purchase-card {
+    padding: 20px;
+    gap: 20px;
+  }
+}
+
+/* 1. Header simplificado */
+.pdetail-purchase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.pdetail-purchase-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--text-primary);
+  letter-spacing: -0.015em;
+}
+
+.pdetail-purchase-subtitle {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+.pdetail-token-code {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+/* 2. Precio sin recuadro */
+.pdetail-price-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdetail-price-value {
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.pdetail-price-label {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* 3. Selector de cantidad ordenado */
+.pdetail-calculator-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pdetail-calc-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pdetail-calc-label {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.pdetail-calc-available {
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.pdetail-stepper-box {
+  display: flex;
+  align-items: center;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 6px;
+}
+
+.pdetail-stepper-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-primary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pdetail-stepper-btn:hover:not(:disabled) {
+  background: var(--surface-card-hover);
+  border-color: var(--text-muted);
+}
+
+.pdetail-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pdetail-stepper-input {
+  flex: 1;
+  height: 44px;
+  background: transparent;
+  border: none;
+  outline: none;
+  text-align: center;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pdetail-chips-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pdetail-preset-chip {
+  flex: 1;
+  appearance: none;
+  height: 36px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: grid;
+  place-items: center;
+}
+
+.pdetail-preset-chip:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.pdetail-preset-chip.active {
+  background: var(--surface-card);
+  border-color: var(--brand-gold, #d4af37);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.pdetail-preset-chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 4. Resumen consolidado */
+.pdetail-summary-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdetail-summary-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pdetail-summary-total {
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.pdetail-summary-estimate {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #10b981;
+  margin-top: 2px;
+}
+
+/* Alertas de error y éxito */
+.pdetail-alert-box {
+  padding: 12px 14px;
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.pdetail-alert-box.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+.pdetail-alert-box.success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--text-primary);
+}
+
+/* 5. Botón principal acortado */
+.pdetail-cta-btn {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all var(--transition-fast);
+}
+
+.pdetail-cta-btn:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.pdetail-cta-btn:focus-visible {
+  outline: 2px solid var(--btn-primary-bg);
+  outline-offset: 2px;
+}
+
+.pdetail-cta-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 6. Pie discreto */
+.pdetail-legal-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.pdetail-legal-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--transition-fast);
+}
+
+.pdetail-legal-link:hover {
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   2. Full-Width Information Card (Below Top Row)
+   -------------------------------------------------------------------------- */
+.pdetail-section-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--text-primary);
+  letter-spacing: -0.015em;
+}
+
+.pdetail-desc {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.pdetail-concept {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0 0 20px;
+  padding-left: 14px;
+  border-left: 3px solid var(--brand-gold, #d4af37);
+}
+
+/* Metric boxes: 4 columns across full width */
+.pdetail-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 820px) {
+  .pdetail-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .pdetail-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pdetail-metric-box {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdetail-metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pdetail-metric-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.pdetail-metric-val.emerald {
+  color: #10b981;
+}
+
+.pdetail-metric-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+.pdetail-stakeholders-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 640px) {
+  .pdetail-stakeholders-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pdetail-stakeholder-box {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdetail-stakeholder-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.pdetail-stakeholder-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pdetail-stakeholder-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.pdetail-stakeholder-meta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pdetail-amenities-box {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+
+.pdetail-amenities-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.pdetail-amenities-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   3. Full-Width Construction Tracking Card (Below Information Card)
+   -------------------------------------------------------------------------- */
+.pdetail-tracking-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pdetail-progress-summary-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+
+.pdetail-progress-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: #10b981;
+  line-height: 1;
+}
+
+.pdetail-progress-lbl {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.pdetail-workstatus-banner {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.pdetail-tabs-bar {
+  display: flex;
+  gap: 6px;
+  background: var(--color-surface-raised);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-glass-border);
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.pdetail-tab-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.pdetail-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pdetail-tab-btn.active {
+  background: var(--surface-card);
+  border-color: var(--surface-glass-border);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}

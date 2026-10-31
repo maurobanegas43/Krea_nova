@@ -1,17 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet, Link } from 'react-router-dom';
 import {
   Sun,
   Moon,
   LogOut,
-  Wallet,
+  ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { UserProfileDrawer } from './UserProfileDrawer';
 
 export const Shell: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState<boolean>(false);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column' }}>
@@ -79,29 +81,33 @@ export const Shell: React.FC = () => {
             style={{ display: 'flex', gap: '28px', alignItems: 'center' }}
             className="desktop-nav"
           >
-            <Link
-              to="/#como-funciona"
-              style={{
-                fontSize: 'var(--text-sm)',
-                color: 'var(--text-muted)',
-                fontWeight: 500,
-                transition: 'color 150ms ease',
-              }}
-            >
-              Cómo Funciona
-            </Link>
+            {!isAuthenticated && (
+              <>
+                <Link
+                  to="/#como-funciona"
+                  style={{
+                    fontSize: 'var(--text-sm)',
+                    color: 'var(--text-muted)',
+                    fontWeight: 500,
+                    transition: 'color 150ms ease',
+                  }}
+                >
+                  Cómo Funciona
+                </Link>
 
-            <Link
-              to="/#seguridad"
-              style={{
-                fontSize: 'var(--text-sm)',
-                color: 'var(--text-muted)',
-                fontWeight: 500,
-                transition: 'color 150ms ease',
-              }}
-            >
-              Seguridad Jurídica
-            </Link>
+                <Link
+                  to="/#seguridad"
+                  style={{
+                    fontSize: 'var(--text-sm)',
+                    color: 'var(--text-muted)',
+                    fontWeight: 500,
+                    transition: 'color 150ms ease',
+                  }}
+                >
+                  Seguridad Jurídica
+                </Link>
+              </>
+            )}
 
             <NavLink
               to="/app/projects"
@@ -168,60 +174,100 @@ export const Shell: React.FC = () => {
             </button>
 
             {isAuthenticated ? (
-              <>
-                {/* Real User Balance */}
-                <div
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* Interactive User Logo / Avatar Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsProfileDrawerOpen(true)}
+                  title="Abrir panel de perfil, asesor personal y configuración fiduciaria"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    padding: '6px 14px',
-                    borderRadius: 'var(--radius-full)',
-                    background: 'var(--surface-card)',
+                    gap: '10px',
+                    padding: '4px 10px 4px 4px',
+                    borderRadius: '24px',
+                    background: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid var(--surface-glass-border)',
-                    fontSize: '13px',
+                    cursor: 'pointer',
+                    transition: 'all 150ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--brand-gold)';
+                    e.currentTarget.style.background = 'rgba(212, 175, 55, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--surface-glass-border)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
                   }}
                 >
-                  <Wallet size={14} style={{ color: 'var(--text-muted)' }} />
-                  <span style={{ color: 'var(--text-muted)' }}>Saldo:</span>
-                  <strong className="num" style={{ color: 'var(--text-primary)' }}>$15.325 USD</strong>
-                </div>
-
-                {/* User Avatar + Logout */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div
                     style={{
                       width: '32px',
                       height: '32px',
                       borderRadius: '50%',
-                      background: 'var(--btn-primary-bg)',
-                      color: 'var(--btn-primary-text)',
+                      background: 'linear-gradient(135deg, var(--brand-gold) 0%, #b89628 100%)',
+                      color: '#09090b',
                       fontSize: '12px',
-                      fontWeight: 700,
+                      fontWeight: 800,
                       display: 'grid',
                       placeItems: 'center',
+                      boxShadow: '0 2px 6px var(--brand-gold-glow)',
+                      position: 'relative',
                     }}
                   >
-                    {user?.name ? user.name.slice(0, 2) : 'US'}
+                    {user?.name ? user.name.slice(0, 2).toUpperCase() : 'US'}
+                    {/* Verified Green Dot */}
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: '-1px',
+                        right: '-1px',
+                        width: '9px',
+                        height: '9px',
+                        borderRadius: '50%',
+                        background: '#10b981',
+                        border: '2px solid var(--bg-deep)',
+                      }}
+                    />
                   </div>
 
-                  <button
-                    onClick={logout}
-                    title="Cerrar sesión"
+                  <span
                     style={{
-                      color: 'var(--text-subtle)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      padding: '4px',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      maxWidth: '120px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <LogOut size={16} />
-                  </button>
-                </div>
-              </>
+                    {user?.name?.split(' ')[0] || 'Mi Cuenta'}
+                  </span>
+
+                  <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
+                </button>
+
+                <button
+                  onClick={logout}
+                  title="Cerrar sesión"
+                  style={{
+                    color: 'var(--text-subtle)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'color 150ms ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
             ) : (
               <>
                 {/* Unauthenticated CTAs: Pure Login / Register */}
@@ -249,6 +295,12 @@ export const Shell: React.FC = () => {
       <main className="container-responsive" style={{ paddingTop: '36px', paddingBottom: '64px', flex: 1 }}>
         <Outlet />
       </main>
+
+      {/* User Profile & Help Sidebar Drawer */}
+      <UserProfileDrawer
+        isOpen={isProfileDrawerOpen}
+        onClose={() => setIsProfileDrawerOpen(false)}
+      />
     </div>
   );
 };

@@ -1,9 +1,10 @@
 -- 000002_seed_developers_and_projects.up.sql
 -- Seed script with 6 Real Estate Developers (Inmobiliarias) and their projects
 
--- 1. Insert Developer Users
+-- 1. Insert Developer Users & Demo Investor
 INSERT INTO users (id, email, phone, password_hash, role, user_type, is_active, created_at, updated_at)
 VALUES 
+    ('usr-investor-01', 'inversor@kreanova.capital', '+54 9 11 4000-8800', '$2a$12$K1dJ5n7a8Z9v0X1y2W3u4O5p6Q7r8S9t0U1v2W3x4Y5z6A7b8C9d.', 'investor', 'individual', TRUE, NOW(), NOW()),
     ('usr-dev-alpes', 'desarrollo@alpesurban.com.ar', '+54 11 4820-9100', '$2a$12$e8Y6Wz1P0xG7Z8v7F6aHNuK5wP4gK3j8L2m1N0o9P8q7R6s5T4u3V', 'developer', 'corporate', TRUE, NOW(), NOW()),
     ('usr-dev-urban', 'info@urbancapital.com.ar', '+54 11 5238-1400', '$2a$12$e8Y6Wz1P0xG7Z8v7F6aHNuK5wP4gK3j8L2m1N0o9P8q7R6s5T4u3V', 'developer', 'corporate', TRUE, NOW(), NOW()),
     ('usr-dev-nord', 'operaciones@nordlogistics.com.ar', '+54 11 6091-7700', '$2a$12$e8Y6Wz1P0xG7Z8v7F6aHNuK5wP4gK3j8L2m1N0o9P8q7R6s5T4u3V', 'developer', 'corporate', TRUE, NOW(), NOW()),
@@ -13,6 +14,15 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. Insert Developer Profiles (Audited & Verified Inmobiliarias)
+INSERT INTO investor_profiles (
+    id, user_id, full_name, dni_encrypted, cuil_encrypted, birth_date,
+    address_encrypted, city, province, funds_origin, is_pep, is_obligated_subject,
+    kyc_status, verified_at
+)
+VALUES 
+    ('prof-investor-01', 'usr-investor-01', 'Inversor Institucional Demo', 'ENC_DNI_DEMO', 'ENC_CUIL_DEMO', '1990-05-15', 'ENC_ADDR_DEMO', 'Buenos Aires', 'CABA', 'Actividad Comercial / Ahorro Inmobiliario', FALSE, FALSE, 'verified', NOW())
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO developer_profiles (
     id, user_id, company_name, trade_name, company_type, cuit, registration_number, 
     legal_address, rep_full_name, rep_role, rep_dni_encrypted, rep_cuil_encrypted, 

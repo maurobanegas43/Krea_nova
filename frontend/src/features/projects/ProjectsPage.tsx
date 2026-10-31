@@ -1,26 +1,37 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Search,
-  ArrowRight,
-  MapPin,
-  ShieldCheck,
   X,
   Building2,
-  Camera,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { api } from '../../services/api';
-import { Project } from '../../types';
+import { Project, DeveloperProfile } from '../../types';
+import { getProjectAuditDetails } from '../../services/projectAuditData';
+import { ProjectCard } from './components/ProjectCard';
 
 export const ProjectsPage: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [developers, setDevelopers] = useState<DeveloperProfile[]>([]);
   const [filter, setFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [galleryProject, setGalleryProject] = useState<Project | null>(null);
+  const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    api.getProjects().then(setProjects);
+    Promise.all([api.getProjects(), api.getDevelopers()]).then(([projs, devs]) => {
+      setProjects(projs);
+      setDevelopers(devs);
+    });
   }, []);
+
+  const developerMap = useMemo(() => {
+    const map = new Map<string, DeveloperProfile>();
+    developers.forEach((d) => map.set(d.id, d));
+    return map;
+  }, [developers]);
 
   const filteredProjects = projects.filter((p) => {
     const matchesFilter =
@@ -162,6 +173,7 @@ export const ProjectsPage: React.FC = () => {
             <button
               onClick={() => setFilter('all')}
               style={{
+                fontFamily: 'var(--font-body, "Inter", sans-serif)',
                 height: '40px',
                 padding: '0 20px',
                 fontSize: '14px',
@@ -181,6 +193,7 @@ export const ProjectsPage: React.FC = () => {
             <button
               onClick={() => setFilter('residential')}
               style={{
+                fontFamily: 'var(--font-body, "Inter", sans-serif)',
                 height: '40px',
                 padding: '0 20px',
                 fontSize: '14px',
@@ -200,6 +213,7 @@ export const ProjectsPage: React.FC = () => {
             <button
               onClick={() => setFilter('corporate')}
               style={{
+                fontFamily: 'var(--font-body, "Inter", sans-serif)',
                 height: '40px',
                 padding: '0 20px',
                 fontSize: '14px',
@@ -213,7 +227,7 @@ export const ProjectsPage: React.FC = () => {
                 transition: 'all var(--transition-fast)',
               }}
             >
-              Corporativo & Logística
+              Corporativo y logística
             </button>
           </div>
         </div>
@@ -263,281 +277,210 @@ export const ProjectsPage: React.FC = () => {
       ) : (
         <div className="projects-grid">
           {filteredProjects.map((p) => {
-            const goalUSD = p.fundingGoal / 100;
-            const raisedUSD = p.fundsRaised / 100;
-            const cardImage =
-              p.imageUrl || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80';
+            const dev = developerMap.get(p.developerId);
+            const isDeveloperVerified = dev?.verificationStatus === 'verified';
+            const audit = getProjectAuditDetails(p.id);
+            const isFideicomisoInscripto = Boolean(audit?.constructionData?.fiduciaryTrustee);
 
             return (
-              <div
+              <ProjectCard
                 key={p.id}
-                className="card"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                  overflow: 'hidden',
-                  borderRadius: '20px',
-                  border: '1px solid var(--surface-glass-border)',
-                  background: 'var(--surface-card)',
-                  boxShadow: 'var(--shadow-card)',
-                  transition: 'transform var(--transition-fast), border-color var(--transition-fast)',
+                project={p}
+                isDeveloperVerified={isDeveloperVerified}
+                isFideicomisoInscripto={isFideicomisoInscripto}
+                onOpenGallery={(proj) => {
+                  setGalleryProject(proj);
+                  setActivePhotoIdx(0);
                 }}
-              >
-              {/* Building Image Cover - Fixed 240px */}
-              <div
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Lightbox / Galería accesible para inspección fotográfica */}
+      {galleryProject && galleryProject.images && galleryProject.images.length > 0 && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Galería fotográfica de ${galleryProject.name}`}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(9, 9, 11, 0.94)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '24px',
+          }}
+          onClick={() => setGalleryProject(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setGalleryProject(null);
+            if (e.key === 'ArrowRight') {
+              setActivePhotoIdx((prev) => (prev + 1) % galleryProject.images!.length);
+            }
+            if (e.key === 'ArrowLeft') {
+              setActivePhotoIdx(
+                (prev) => (prev - 1 + galleryProject.images!.length) % galleryProject.images!.length
+              );
+            }
+          }}
+          tabIndex={0}
+        >
+          {/* Botón de cierre accesible */}
+          <button
+            type="button"
+            onClick={() => setGalleryProject(null)}
+            aria-label="Cerrar visor de galería"
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#ffffff',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              display: 'grid',
+              placeItems: 'center',
+              cursor: 'pointer',
+              zIndex: 10,
+              transition: 'background var(--transition-fast, 150ms ease)',
+            }}
+          >
+            <X size={20} />
+          </button>
+
+          {/* Contenido de la fotografía activa */}
+          <div
+            style={{
+              maxWidth: '1000px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              position: 'relative',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <img
+                src={galleryProject.images[activePhotoIdx].url}
+                alt={galleryProject.images[activePhotoIdx].caption || galleryProject.name}
                 style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '240px',
-                  minHeight: '240px',
-                  maxHeight: '240px',
-                  overflow: 'hidden',
+                  maxWidth: '100%',
+                  maxHeight: '70vh',
+                  objectFit: 'contain',
+                  borderRadius: '16px',
+                  boxShadow: '0 25px 60px rgba(0,0,0,0.85)',
                 }}
-              >
-                <img
-                  src={cardImage}
-                  alt={p.name}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                />
+              />
 
-                {/* Subtle dark gradient overlay */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%)',
-                  }}
-                />
-
-                {/* Photo Count Badge */}
-                {p.images && p.images.length > 0 && (
-                  <div
+              {/* Botones de navegación Prev / Next con teclado y cursor */}
+              {galleryProject.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActivePhotoIdx(
+                        (prev) => (prev - 1 + galleryProject.images!.length) % galleryProject.images!.length
+                      )
+                    }
+                    aria-label="Fotografía anterior"
                     style={{
                       position: 'absolute',
-                      top: '16px',
-                      left: '16px',
-                      background: 'rgba(9, 9, 11, 0.82)',
-                      backdropFilter: 'blur(8px)',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(9, 9, 11, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
                       color: '#ffffff',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '5px 10px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      border: '1px solid rgba(255, 255, 255, 0.18)',
-                    }}
-                  >
-                    <Camera size={13} style={{ color: 'var(--brand-gold)' }} />
-                    <span>{p.images.length} fotos</span>
-                  </div>
-                )}
-
-                {/* Floating APY Pill */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '16px',
-                    right: '16px',
-                    background: 'rgba(9, 9, 11, 0.92)',
-                    color: '#ffffff',
-                    backdropFilter: 'blur(10px)',
-                    padding: '6px 14px',
-                    borderRadius: '999px',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    letterSpacing: '0.02em',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                  }}
-                >
-                  {p.expectedApy || 12.5}% APY en USD
-                </div>
-
-                {/* Location on image */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: '14px',
-                    left: '18px',
-                    right: '18px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: '#ffffff',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                  }}
-                >
-                  <MapPin size={15} style={{ flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.location}
-                  </span>
-                </div>
-              </div>
-
-              {/* Card Body - Perfectly balanced and equalized across all cards */}
-              <div
-                style={{
-                  padding: 'clamp(20px, 3vw, 26px)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '18px',
-                  flex: 1,
-                }}
-              >
-                <div>
-                  {p.developerName && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        marginBottom: '6px',
-                        fontSize: '11px',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      <Building2 size={13} style={{ color: 'var(--brand-gold)', flexShrink: 0 }} />
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          color: 'var(--text-primary)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {p.developerName}
-                      </span>
-                      <ShieldCheck size={13} style={{ color: '#10b981', flexShrink: 0 }} />
-                    </div>
-                  )}
-                  <h2
-                    style={{
-                      fontSize: '1.3rem',
-                      fontWeight: 700,
-                      letterSpacing: '-0.025em',
-                      color: 'var(--text-primary)',
-                      marginBottom: '8px',
-                      lineHeight: 1.25,
-                      height: '34px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {p.name}
-                  </h2>
-                  <p
-                    style={{
-                      color: 'var(--text-muted)',
-                      fontSize: '14px',
-                      lineHeight: 1.55,
+                      width: '44px',
                       height: '44px',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                      margin: 0,
+                      borderRadius: '50%',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                      backdropFilter: 'blur(8px)',
                     }}
                   >
-                    {p.description}
-                  </p>
-                </div>
-
-                {/* Funding Progress Bar - Fixed Height */}
-                <div style={{ display: 'grid', gap: '8px', minHeight: '38px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', lineHeight: '20px' }}>
-                    <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      Fondeado: <strong className="num" style={{ color: 'var(--text-primary)', fontWeight: 700 }}>${raisedUSD.toLocaleString()} USD</strong>
-                    </span>
-                    <span className="num" style={{ fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', marginLeft: '8px' }}>
-                      {p.fundedPercent}% de ${goalUSD.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="progress__track" style={{ height: '7px' }}>
-                    <div
-                      className="progress__fill"
-                      style={{ width: `${Math.min(p.fundedPercent, 100)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* 2 Essential Metrics: Ticket & Plazo - Fixed 72px */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '12px',
-                    padding: '14px 18px',
-                    height: '72px',
-                    boxSizing: 'border-box',
-                    background: 'var(--color-surface-raised)',
-                    borderRadius: '12px',
-                    border: '1px solid var(--color-border)',
-                  }}
-                >
-                  <div>
-                    <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Ticket Mínimo
-                    </span>
-                    <strong className="num" style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 700, display: 'block', marginTop: '2px' }}>
-                      ${p.minInvestment || 500} USD
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Plazo Estimado
-                    </span>
-                    <strong className="num" style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 700, display: 'block', marginTop: '2px' }}>
-                      {p.durationMonths || 24} meses
-                    </strong>
-                  </div>
-                </div>
-
-                {/* CTA Action Footer - Pushed to bottom with marginTop: auto */}
-                <div
-                  style={{
-                    marginTop: 'auto',
-                    paddingTop: '16px',
-                    borderTop: '1px solid var(--color-border)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-subtle)', fontWeight: 600 }}>
-                    <ShieldCheck size={16} />
-                    <span>Fideicomiso Inscripto</span>
-                  </div>
-
-                  <Link
-                    to={`/app/projects/${p.id}`}
-                    className="btn-primary"
+                    <ChevronLeft size={22} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActivePhotoIdx((prev) => (prev + 1) % galleryProject.images!.length)
+                    }
+                    aria-label="Fotografía siguiente"
                     style={{
-                      height: '42px',
-                      padding: '0 20px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      gap: '8px',
-                      borderRadius: '10px',
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(9, 9, 11, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      color: '#ffffff',
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                      backdropFilter: 'blur(8px)',
                     }}
                   >
-                    <span>Ver Proyecto</span>
-                    <ArrowRight size={15} />
-                  </Link>
-                </div>
-              </div>
+                    <ChevronRight size={22} />
+                  </button>
+                </>
+              )}
             </div>
-          );
-        })}
+
+            <div
+              style={{
+                marginTop: '16px',
+                textAlign: 'center',
+                color: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    padding: '4px 12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--brand-gold, #d4af37)',
+                  }}
+                >
+                  {galleryProject.images[activePhotoIdx].category === 'render'
+                    ? 'Render Arquitectónico'
+                    : galleryProject.images[activePhotoIdx].category === 'construction'
+                    ? 'Avance de Obra Real'
+                    : galleryProject.images[activePhotoIdx].category === 'interior'
+                    ? 'Interiores & Semipisos'
+                    : galleryProject.images[activePhotoIdx].category === 'amenity'
+                    ? 'Amenities & Spa'
+                    : 'Registro Fotográfico'}
+                </span>
+                <span style={{ fontSize: '13px', color: 'var(--text-muted, #a1a1aa)' }}>
+                  {activePhotoIdx + 1} de {galleryProject.images.length}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: '14px', color: '#e4e4e7', maxWidth: '640px', lineHeight: 1.45 }}>
+                {galleryProject.images[activePhotoIdx].caption}
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>

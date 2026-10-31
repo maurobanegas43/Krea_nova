@@ -119,11 +119,28 @@ export interface Investment {
   id: string;
   projectId: string;
   projectName: string;
+  tokenSymbol?: string;
+  category?: string;
+  expectedApy?: number;
   amount: number;
   tokens: number;
   date: string;
-  status: 'active' | 'completed' | 'processing';
+  status: 'active' | 'completed' | 'processing' | 'pending';
   simulatedTxHash: string;
+}
+
+export interface FiduciaryAccount {
+  id: string;
+  bankName: string;
+  accountHolder: string;
+  cuit: string;
+  accountType: string;
+  cbu: string;
+  alias: string;
+  currency: string;
+  cryptoToken: string;
+  cryptoNetwork: string;
+  cryptoVaultAddress: string;
 }
 
 export interface SecondaryMarketOrder {
@@ -143,9 +160,25 @@ export interface SecondaryMarketOrder {
 export interface LedgerEntry {
   id: string;
   timestamp: string;
-  type: 'deposit' | 'investment' | 'yield' | 'trade';
+  type: 'deposit' | 'investment' | 'yield' | 'trade' | 'withdrawal';
   description: string;
   amount: number;
   balanceAfter: number;
   referenceId: string;
+}
+
+export type PaymentGatewayProvider = 'simulated' | 'mercadopago' | 'stripe';
+export type PaymentStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface PaymentIntent {
+  id: string;
+  userId: string;
+  provider: PaymentGatewayProvider;
+  externalId: string;
+  amountCents: number;
+  currency: string;
+  status: PaymentStatus;
+  checkoutUrl?: string;
+  createdAt: string;
+  updatedAt: string;
 }

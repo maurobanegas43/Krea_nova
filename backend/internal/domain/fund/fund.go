@@ -19,9 +19,10 @@ const (
 type AccountType string
 
 const (
-	AccountFiatEscrow   AccountType = "fiat_escrow"
-	AccountInvestor     AccountType = "investor_wallet"
-	AccountPlatformFee  AccountType = "platform_fee"
+	AccountFiatEscrow        AccountType = "fiat_escrow"
+	AccountInvestor          AccountType = "investor_wallet"
+	AccountPlatformFee       AccountType = "platform_fee"
+	AccountGatewayClearing   AccountType = "gateway_clearing"
 )
 
 type EntryType string
@@ -41,12 +42,18 @@ var (
 
 // Investment represents a direct capital commitment to a project/fund.
 type Investment struct {
-	ID          string
-	ProjectID   string
-	InvestorID  string
-	AmountCents int64
-	Status      InvestmentStatus
-	CreatedAt   time.Time
+	ID              string           `json:"id"`
+	ProjectID       string           `json:"projectId"`
+	ProjectName     string           `json:"projectName,omitempty"`
+	TokenSymbol     string           `json:"tokenSymbol,omitempty"`
+	Category        string           `json:"category,omitempty"`
+	ExpectedAPY     float64          `json:"expectedApy,omitempty"`
+	InvestorID      string           `json:"investorId"`
+	AmountCents     int64            `json:"amountCents"`
+	TokenCount      int              `json:"tokenCount"`
+	TokenPriceCents int64            `json:"tokenPriceCents"`
+	Status          InvestmentStatus `json:"status"`
+	CreatedAt       time.Time        `json:"createdAt"`
 }
 
 // NewInvestment validates the financial commitment.
@@ -54,36 +61,59 @@ func NewInvestment(id, projectID, investorID string, amountCents int64, now time
 	if amountCents <= 0 {
 		return nil, ErrInvalidAmount
 	}
+	tokenPrice := int64(10000) // $100.00 USD default token denomination
+	tokens := int(amountCents / tokenPrice)
+	if tokens < 1 {
+		tokens = 1
+	}
 	return &Investment{
-		ID:          id,
-		ProjectID:   projectID,
-		InvestorID:  investorID,
-		AmountCents: amountCents,
-		Status:      InvestmentPending,
-		CreatedAt:   now,
+		ID:              id,
+		ProjectID:       projectID,
+		InvestorID:      investorID,
+		AmountCents:     amountCents,
+		TokenCount:      tokens,
+		TokenPriceCents: tokenPrice,
+		Status:          InvestmentPending,
+		CreatedAt:       now,
 	}, nil
 }
 
 // LedgerAccount represents a balance-holding account in the relational ledger.
 type LedgerAccount struct {
-	ID          string
-	UserID      *string // NULL for system-level accounts (e.g., escrow or fee pool)
-	AccountType AccountType
-	Currency    string
-	IsActive    bool
-	CreatedAt   time.Time
+	ID          string      `json:"id"`
+	UserID      *string     `json:"userId,omitempty"` // NULL for system-level accounts (e.g., escrow or fee pool)
+	AccountType AccountType `json:"accountType"`
+	Currency    string      `json:"currency"`
+	IsActive    bool        `json:"isActive"`
+	CreatedAt   time.Time   `json:"createdAt"`
 }
 
 // LedgerEntry is an immutable transaction record adhering to double-entry accounting.
 type LedgerEntry struct {
-	ID                 string
-	AccountID          string
-	TransactionGroupID string // Shared across paired debit/credit entries
-	EntryType          EntryType
-	AmountCents        int64
-	ReferenceType      string // "investment", "deposit", "fee", "yield"
-	ReferenceID        string
-	CreatedAt          time.Time
+	ID                 string    `json:"id"`
+	AccountID          string    `json:"accountId"`
+	TransactionGroupID string    `json:"transactionGroupId"` // Shared across paired debit/credit entries
+	EntryType          EntryType `json:"entryType"`
+	AmountCents        int64     `json:"amountCents"`
+	ReferenceType      string    `json:"referenceType"` // "investment", "deposit", "withdrawal", "fee", "yield"
+	ReferenceID        string    `json:"referenceId"`
+	Description        string    `json:"description"`
+	CreatedAt          time.Time `json:"createdAt"`
+}
+
+// FiduciaryAccount represents official bank custody rails and smart contract vaults.
+type FiduciaryAccount struct {
+	ID                 string `json:"id"`
+	BankName           string `json:"bankName"`
+	AccountHolder      string `json:"accountHolder"`
+	CUIT               string `json:"cuit"`
+	AccountType        string `json:"accountType"`
+	CBU                string `json:"cbu"`
+	Alias              string `json:"alias"`
+	Currency           string `json:"currency"`
+	CryptoToken        string `json:"cryptoToken"`
+	CryptoNetwork      string `json:"cryptoNetwork"`
+	CryptoVaultAddress string `json:"cryptoVaultAddress"`
 }
 
 // ValidateTransactionPair checks that the transaction group maintains zero-sum equilibrium.

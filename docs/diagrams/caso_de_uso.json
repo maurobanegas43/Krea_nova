@@ -1,0 +1,44 @@
+{
+  "op": "set",
+  "diagram": {
+    "type": "usecase",
+    "title": "Diagrama General de Casos de Uso - Krea Nova",
+    "nodes": [
+      {"id": "sys", "kind": "system", "label": "Plataforma Krea Nova (Fintech RWA)", "x": 160, "y": 40, "w": 780, "h": 580},
+      {"id": "act_inv", "kind": "actor", "label": "Inversor", "x": 40, "y": 250, "w": 70, "h": 100},
+      {"id": "act_dev", "kind": "actor", "label": "Desarrollador", "x": 40, "y": 460, "w": 70, "h": 100},
+      {"id": "act_adm", "kind": "actor", "label": "Admin / Compliance", "x": 990, "y": 280, "w": 70, "h": 100},
+      {"id": "cu_kyc_inv", "kind": "usecase", "label": "Registro y KYC (DNI/CUIL)", "x": 220, "y": 90, "w": 180, "h": 65},
+      {"id": "cu_catalogo", "kind": "usecase", "label": "Explorar Catálogo", "x": 220, "y": 195, "w": 180, "h": 65},
+      {"id": "cu_invertir", "kind": "usecase", "label": "Suscribir Inversión", "x": 220, "y": 300, "w": 180, "h": 65},
+      {"id": "cu_portfolio", "kind": "usecase", "label": "Consultar Portfolio", "x": 220, "y": 405, "w": 180, "h": 65},
+      {"id": "cu_mercado", "kind": "usecase", "label": "Operar Mercado Secundario", "x": 220, "y": 510, "w": 180, "h": 65},
+      {"id": "cu_reg_empresa", "kind": "usecase", "label": "Alta Societaria y UBO", "x": 460, "y": 510, "w": 180, "h": 65},
+      {"id": "cu_crear_proyecto", "kind": "usecase", "label": "Registrar Proyecto Inm.", "x": 460, "y": 405, "w": 180, "h": 65},
+      {"id": "cu_subir_docs", "kind": "usecase", "label": "Cargar Documentos Obra", "x": 460, "y": 300, "w": 180, "h": 65},
+      {"id": "cu_hitos", "kind": "usecase", "label": "Publicar Avance e Hitos", "x": 460, "y": 195, "w": 180, "h": 65},
+      {"id": "cu_val_kyc", "kind": "usecase", "label": "Validar KYC / AML", "x": 710, "y": 90, "w": 180, "h": 65},
+      {"id": "cu_rev_proyecto", "kind": "usecase", "label": "Revisión Legal y Técnica", "x": 710, "y": 230, "w": 180, "h": 65},
+      {"id": "cu_pub_proyecto", "kind": "usecase", "label": "Aprobar y Emitir Proyecto", "x": 710, "y": 370, "w": 180, "h": 65},
+      {"id": "cu_auditoria", "kind": "usecase", "label": "Auditar Ledger y Tokens", "x": 710, "y": 510, "w": 180, "h": 65}
+    ],
+    "edges": [
+      {"from": "act_inv", "to": "cu_kyc_inv"},
+      {"from": "act_inv", "to": "cu_catalogo"},
+      {"from": "act_inv", "to": "cu_invertir"},
+      {"from": "act_inv", "to": "cu_portfolio"},
+      {"from": "act_inv", "to": "cu_mercado"},
+      {"from": "act_dev", "to": "cu_reg_empresa"},
+      {"from": "act_dev", "to": "cu_crear_proyecto"},
+      {"from": "act_dev", "to": "cu_subir_docs"},
+      {"from": "act_dev", "to": "cu_hitos"},
+      {"from": "act_adm", "to": "cu_val_kyc"},
+      {"from": "act_adm", "to": "cu_rev_proyecto"},
+      {"from": "act_adm", "to": "cu_pub_proyecto"},
+      {"from": "act_adm", "to": "cu_auditoria"},
+      {"from": "cu_invertir", "to": "cu_kyc_inv", "label": "<<include>>", "dashed": true},
+      {"from": "cu_crear_proyecto", "to": "cu_subir_docs", "label": "<<include>>", "dashed": true},
+      {"from": "cu_pub_proyecto", "to": "cu_rev_proyecto", "label": "<<include>>", "dashed": true}
+    ]
+  }
+}

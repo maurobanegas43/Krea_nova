@@ -1,0 +1,489 @@
+/* ==========================================================================
+   SecondaryMarketPage Stylesheet — Unified Inter Typography & Clean Layout
+   Two-Column Desktop: Order Book (Left) & Form (Right 380px)
+   Shared Project Selector & High Accessibility
+   ========================================================================== */
+
+.sec-market-root {
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  max-width: 1280px;
+  margin-inline: auto;
+  width: 100%;
+  padding-inline: clamp(20px, 3vw, 32px);
+  padding-bottom: 80px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   1. Encabezado limpio y selector compartido
+   -------------------------------------------------------------------------- */
+.sec-market-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sec-market-title {
+  font-size: clamp(26px, 3vw, 32px);
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.sec-market-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sec-market-selector-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.sec-market-select {
+  appearance: none;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  padding: 10px 38px 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  min-width: 280px;
+  max-width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.sec-market-select:focus-visible {
+  border-color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   2. Cuadrícula principal (Libro izquierda + Formulario derecha)
+   -------------------------------------------------------------------------- */
+.sec-market-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .sec-market-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+/* Paneles base */
+.sec-market-panel {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .sec-market-panel {
+    padding: 18px;
+  }
+}
+
+.sec-market-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.sec-market-panel__title {
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.sec-market-panel__badge {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   3. Libro de órdenes (Compras a la izquierda, Ventas a la derecha)
+   -------------------------------------------------------------------------- */
+.sec-market-orderbook-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .sec-market-orderbook-columns {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+.sec-market-book-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sec-market-book-side__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sec-market-book-side__header.buy {
+  color: #10b981;
+}
+
+.sec-market-book-side__header.sell {
+  color: #ef4444;
+}
+
+.sec-market-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.sec-market-table th {
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--surface-glass-border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sec-market-table th:first-child {
+  text-align: left;
+}
+
+.sec-market-table td {
+  padding: 11px 8px;
+  border-bottom: 1px solid var(--surface-glass-border);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.sec-market-table td:first-child {
+  text-align: left;
+}
+
+.sec-market-table tr.clickable {
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.sec-market-table tr.clickable:hover td {
+  background: var(--surface-card-hover);
+}
+
+.sec-market-table tr.clickable:focus-visible td {
+  background: var(--surface-card-hover);
+  outline: 2px solid var(--brand-gold, #d4af37);
+}
+
+.sec-market-price.buy {
+  font-weight: 600;
+  color: #10b981;
+}
+
+.sec-market-price.sell {
+  font-weight: 600;
+  color: #ef4444;
+}
+
+.sec-market-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--color-surface-raised);
+  border-radius: 10px;
+  border: 1px dashed var(--surface-glass-border);
+}
+
+/* --------------------------------------------------------------------------
+   4. Formulario de nueva orden
+   -------------------------------------------------------------------------- */
+.sec-market-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Segmented Control Comprar / Vender */
+.sec-market-segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 4px;
+  height: 48px;
+  box-sizing: border-box;
+}
+
+.sec-market-segment-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: grid;
+  place-items: center;
+}
+
+.sec-market-segment-btn:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.sec-market-segment-btn.active.buy {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.sec-market-segment-btn.active.sell {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+/* Referencia al proyecto */
+.sec-market-project-badge {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  background: var(--color-surface-raised);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sec-market-project-badge strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Campos de entrada */
+.sec-market-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sec-market-field__label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sec-market-field__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.sec-market-field__help {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sec-market-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sec-market-input-prefix {
+  position: absolute;
+  left: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.sec-market-input {
+  width: 100%;
+  height: 46px;
+  border-radius: 10px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 0 14px;
+  box-sizing: border-box;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--transition-fast);
+}
+
+.sec-market-input.with-prefix {
+  padding-left: 52px;
+}
+
+.sec-market-input:focus {
+  border-color: var(--text-primary);
+}
+
+/* Disponibilidad contextual */
+.sec-market-availability {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sec-market-availability strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Resumen consolidado */
+.sec-market-summary-card {
+  background: var(--color-surface-raised);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.sec-market-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.sec-market-summary-row.total {
+  padding-top: 8px;
+  border-top: 1px solid var(--surface-glass-border);
+  margin-top: 2px;
+  color: var(--text-primary);
+}
+
+.sec-market-summary-total-val {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* Botón principal */
+.sec-market-submit-btn {
+  appearance: none;
+  width: 100%;
+  height: 48px;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.sec-market-submit-btn.buy {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.sec-market-submit-btn.buy:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.sec-market-submit-btn.sell {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.sec-market-submit-btn.sell:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.sec-market-submit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Mensajes de feedback */
+.sec-market-alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.sec-market-alert.success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #10b981;
+}
+
+.sec-market-alert.error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
