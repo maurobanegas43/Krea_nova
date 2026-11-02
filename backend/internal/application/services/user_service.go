@@ -17,6 +17,9 @@ import (
 
 var (
 	ErrUserAlreadyExists           = errors.New("user: email already registered")
+	ErrEmailAlreadyRegistered      = errors.New("el correo electrónico ya se encuentra registrado")
+	ErrPhoneAlreadyRegistered      = errors.New("el número de teléfono ya se encuentra registrado")
+	ErrDNIAlreadyRegistered        = errors.New("ya hay una cuenta con ese DNI registrado")
 	ErrUserNotFound                = errors.New("user: not found")
 	ErrProfileNotFound             = errors.New("user: investor profile not found")
 	ErrLivenessRequired            = errors.New("user: liveness verification required for investors")
@@ -66,10 +69,19 @@ type LivenessSession struct {
 	Consumed          bool       `json:"consumed"`
 }
 
+type IdentityAvailabilityResult struct {
+	Available   bool   `json:"available"`
+	EmailExists bool   `json:"emailExists"`
+	PhoneExists bool   `json:"phoneExists"`
+	DNIExists   bool   `json:"dniExists"`
+	Message     string `json:"message,omitempty"`
+}
+
 type RegisterUserCommand struct {
 	Email             string
 	Phone             string
 	Password          string
+	DNI               string
 	Role              user.Role
 	UserType          user.UserType
 	GoogleIDToken     string
@@ -354,10 +366,28 @@ func (s *UserService) RegisterUser(ctx context.Context, cmd RegisterUserCommand)
 		return nil, err
 	}
 
-	// 2. Uniqueness check
-	existing, _ := s.repo.FindUserByEmail(ctx, cleanEmail)
-	if existing != nil {
-		return nil, ErrUserAlreadyExists
+	// 2. Strict uniqueness checks (only querying presence of key identity fields)
+	emailExists, _ := s.repo.ExistsByEmail(ctx, cleanEmail)
+	if emailExists {
+		return nil, ErrEmailAlreadyRegistered
+	}
+
+	phoneExists, _ := s.repo.ExistsByPhone(ctx, cleanPhone)
+	if phoneExists {
+		return nil, ErrPhoneAlreadyRegistered
+	}
+
+	var cleanDNI string
+	if cmd.DNI != "" {
+		d, err := validation.ValidateDNI(cmd.DNI)
+		if err != nil {
+			return nil, err
+		}
+		cleanDNI = d
+		dniExists, _ := s.repo.ExistsByDNI(ctx, cleanDNI)
+		if dniExists {
+			return nil, ErrDNIAlreadyRegistered
+		}
 	}
 
 	// 3. Consume the liveness session now that all validations passed
@@ -382,7 +412,83 @@ func (s *UserService) RegisterUser(ctx context.Context, cmd RegisterUserCommand)
 	if err := s.repo.SaveUser(ctx, u); err != nil {
 		return nil, err
 	}
+
+	if cleanDNI != "" && cmd.Role == user.RoleInvestor {
+		dniEnc, err := s.encryptor.Encrypt(cleanDNI)
+		if err == nil {
+			dniHash := crypto.HashSHA256(cleanDNI)
+			_ = s.repo.SaveInvestorProfile(ctx, &user.InvestorProfile{
+				ID:           s.ids.NewID(),
+				UserID:       u.ID,
+				FullName:     u.Email,
+				DNIEncrypted: dniEnc,
+				DNIHash:      dniHash,
+				BirthDate:    "2000-01-01",
+				FundsOrigin:  "Ahorros personales",
+				KYCStatus:    user.KYCPending,
+				Phone:        cleanPhone,
+				VerifiedAt:   nil,
+			})
+		}
+	}
+
 	return u, nil
+}
+
+// CheckAvailability executes minimal database existence queries to verify availability of email, phone, and DNI.
+func (s *UserService) CheckAvailability(ctx context.Context, email, phone, dni string) (*IdentityAvailabilityResult, error) {
+	res := &IdentityAvailabilityResult{
+		Available: true,
+	}
+
+	if strings.TrimSpace(email) != "" {
+		cleanEmail := strings.ToLower(strings.TrimSpace(email))
+		exists, err := s.repo.ExistsByEmail(ctx, cleanEmail)
+		if err == nil && exists {
+			res.EmailExists = true
+			res.Available = false
+			res.Message = "El correo ya se encuentra registrado. Ingrese un correo electrónico válido."
+		}
+	}
+
+	if strings.TrimSpace(phone) != "" {
+		exists, err := s.repo.ExistsByPhone(ctx, phone)
+		if !exists {
+			if cleanPhone, err := validation.ValidateAndFormatPhone(phone, "AR"); err == nil && cleanPhone != phone {
+				exists, _ = s.repo.ExistsByPhone(ctx, cleanPhone)
+			}
+		}
+		if err == nil && exists {
+			res.PhoneExists = true
+			res.Available = false
+			if res.Message == "" {
+				res.Message = "El número de teléfono ya se encuentra registrado. Ingrese un número de teléfono válido."
+			}
+		}
+	}
+
+	if strings.TrimSpace(dni) != "" {
+		cleanDNI, err := validation.ValidateDNI(dni)
+		if err != nil {
+			for _, r := range dni {
+				if r >= '0' && r <= '9' {
+					cleanDNI += string(r)
+				}
+			}
+		}
+		if cleanDNI != "" {
+			exists, err := s.repo.ExistsByDNI(ctx, cleanDNI)
+			if err == nil && exists {
+				res.DNIExists = true
+				res.Available = false
+				if res.Message == "" {
+					res.Message = "Ya hay una cuenta con ese DNI registrado."
+				}
+			}
+		}
+	}
+
+	return res, nil
 }
 
 func (s *UserService) AuthenticateUser(ctx context.Context, email, password string) (*user.User, *DecryptedInvestorProfile, error) {
@@ -415,6 +521,21 @@ func (s *UserService) SaveInvestorProfile(ctx context.Context, cmd SaveInvestorP
 	if err != nil {
 		return nil, err
 	}
+	cleanDNI, dErr := validation.ValidateDNI(cmd.DNI)
+	dniHash := ""
+	if dErr == nil && cleanDNI != "" {
+		dniHash = crypto.HashSHA256(cleanDNI)
+	} else if cmd.DNI != "" {
+		cleanDigits := ""
+		for _, r := range cmd.DNI {
+			if r >= '0' && r <= '9' {
+				cleanDigits += string(r)
+			}
+		}
+		if cleanDigits != "" {
+			dniHash = crypto.HashSHA256(cleanDigits)
+		}
+	}
 	cuilEnc, err := s.encryptor.Encrypt(cmd.CUIL)
 	if err != nil {
 		return nil, err
@@ -438,6 +559,7 @@ func (s *UserService) SaveInvestorProfile(ctx context.Context, cmd SaveInvestorP
 		UserID:                   cmd.UserID,
 		FullName:                 cmd.FullName,
 		DNIEncrypted:             dniEnc,
+		DNIHash:                  dniHash,
 		CUILEncrypted:            cuilEnc,
 		BirthDate:                cmd.BirthDate,
 		AddressEncrypted:         addrEnc,

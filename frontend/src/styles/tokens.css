@@ -299,6 +299,7 @@ button {
 
 /* Responsive Containers */
 .container-responsive {
+  width: 100%;
   max-width: var(--content-max);
   margin: 0 auto;
   padding-left: var(--space-6);

@@ -15,6 +15,7 @@ var (
 	ErrInvalidEmail      = errors.New("validation: invalid email syntax")
 	ErrMustBeGmail       = errors.New("validation: email must be a valid @gmail.com address")
 	ErrInvalidPhone      = errors.New("validation: invalid phone number format or country code")
+	ErrInvalidDNI        = errors.New("validation: el DNI debe tener entre 7 y 8 dígitos numéricos")
 	ErrPasswordTooShort  = errors.New("validation: password must be at least 8 characters")
 	ErrPasswordTooLong   = errors.New("validation: password exceeds maximum length of 72 characters")
 	ErrPasswordNoUpper   = errors.New("validation: password must contain at least one uppercase letter")
@@ -61,6 +62,20 @@ func ValidateEmail(email string) (string, error) {
 		return "", ErrInvalidEmail
 	}
 	return clean, nil
+}
+
+// ValidateDNI validates an Argentine DNI format (7 to 8 numeric digits) and returns the sanitized digits.
+func ValidateDNI(raw string) (string, error) {
+	digits := ""
+	for _, r := range raw {
+		if r >= '0' && r <= '9' {
+			digits += string(r)
+		}
+	}
+	if len(digits) < 7 || len(digits) > 8 {
+		return "", ErrInvalidDNI
+	}
+	return digits, nil
 }
 
 // ValidateAndFormatPhone parses a phone string with libphonenumber, validates it and returns its normalized E.164 representation.

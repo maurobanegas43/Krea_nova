@@ -94,6 +94,7 @@ type InvestorProfile struct {
 	UserID                   string
 	FullName                 string
 	DNIEncrypted             string // AES-256-GCM encrypted
+	DNIHash                  string // Deterministic SHA-256 for blind index check
 	CUILEncrypted            string // AES-256-GCM encrypted
 	BirthDate                string // YYYY-MM-DD
 	AddressEncrypted         string // AES-256-GCM encrypted

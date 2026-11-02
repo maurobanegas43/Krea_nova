@@ -777,4 +777,115 @@ func TestPaymentGateway_DepositAndAssetPurchase(t *testing.T) {
 	}
 }
 
+func TestCheckAvailabilityAndRegisterConflicts(t *testing.T) {
+	r, _, _, _ := setupTestRouter()
+
+	// 1. Initial check: should be available
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/check?email=test.investor@gmail.com&phone=+5491122223333&dni=39111222", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on check availability, got %d: %s", w.Code, w.Body.String())
+	}
+	var avail map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &avail)
+	if avail["available"] != true {
+		t.Fatalf("expected available = true, got %v", avail)
+	}
+
+	// 2. Register user with email, phone, and DNI
+	regBody, _ := json.Marshal(map[string]interface{}{
+		"email":    "test.investor@gmail.com",
+		"phone":    "+5491122223333",
+		"dni":      "39111222",
+		"password": "Password2026!",
+		"role":     "investor",
+		"userType": "individual",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/users/register", bytes.NewReader(regBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created on register, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// 3. Check endpoint again: must indicate unavailable with specific flags
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/users/check?email=test.investor@gmail.com", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	_ = json.Unmarshal(w.Body.Bytes(), &avail)
+	if avail["available"] != false || avail["emailExists"] != true {
+		t.Fatalf("expected emailExists = true and available = false, got %v", avail)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/users/check?phone=+5491122223333", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	_ = json.Unmarshal(w.Body.Bytes(), &avail)
+	if avail["available"] != false || avail["phoneExists"] != true {
+		t.Fatalf("expected phoneExists = true and available = false, got %v", avail)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/users/check?dni=39111222", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	_ = json.Unmarshal(w.Body.Bytes(), &avail)
+	if avail["available"] != false || avail["dniExists"] != true {
+		t.Fatalf("expected dniExists = true and available = false, got %v", avail)
+	}
+
+	// 4. Duplicate registration attempts must return 409 Conflict with clear messages
+	// Duplicate email:
+	dupEmail, _ := json.Marshal(map[string]interface{}{
+		"email":    "test.investor@gmail.com",
+		"phone":    "+5491199998888",
+		"dni":      "40111222",
+		"password": "Password2026!",
+		"role":     "investor",
+		"userType": "individual",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/users/register", bytes.NewReader(dupEmail))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on duplicate email, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Duplicate phone:
+	dupPhone, _ := json.Marshal(map[string]interface{}{
+		"email":    "other.investor@gmail.com",
+		"phone":    "+5491122223333",
+		"dni":      "40111222",
+		"password": "Password2026!",
+		"role":     "investor",
+		"userType": "individual",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/users/register", bytes.NewReader(dupPhone))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on duplicate phone, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Duplicate DNI:
+	dupDNI, _ := json.Marshal(map[string]interface{}{
+		"email":    "other.investor@gmail.com",
+		"phone":    "+5491199998888",
+		"dni":      "39111222",
+		"password": "Password2026!",
+		"role":     "investor",
+		"userType": "individual",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/users/register", bytes.NewReader(dupDNI))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on duplicate DNI, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 

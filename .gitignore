@@ -1,0 +1,11 @@
+# Logs
+.logs/
+*.log
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Environment local overrides
+.env.local
+.env.*.local

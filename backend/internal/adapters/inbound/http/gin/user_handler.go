@@ -32,6 +32,7 @@ type registerRequest struct {
 	Email             string `json:"email" binding:"required,email"`
 	Phone             string `json:"phone" binding:"required"`
 	Password          string `json:"password" binding:"required,min=8,max=72"`
+	DNI               string `json:"dni"`
 	Role              string `json:"role" binding:"required,oneof=investor developer admin"`
 	UserType          string `json:"userType" binding:"required,oneof=individual corporate"`
 	GoogleIDToken     string `json:"googleIdToken"`
@@ -110,6 +111,11 @@ func NewUserHandler(svc *services.UserService) *UserHandler {
 
 func (h *UserHandler) Register(rg *gin.RouterGroup) {
 	g := rg.Group("/users")
+	g.GET("/check", h.checkAvailability)
+	g.GET("/check-availability", h.checkAvailability)
+	g.GET("/check-email", h.checkAvailability)
+	g.GET("/check-phone", h.checkAvailability)
+	g.GET("/check-dni", h.checkAvailability)
 	g.POST("/register", h.register)
 	g.POST("/:id/investor-profile", h.saveInvestorProfile)
 	g.GET("/:id/investor-profile", h.getInvestorProfile)
@@ -119,6 +125,8 @@ func (h *UserHandler) Register(rg *gin.RouterGroup) {
 
 func (h *UserHandler) RegisterAuthRoutes(rg *gin.RouterGroup) {
 	g := rg.Group("/auth")
+	g.GET("/check", h.checkAvailability)
+	g.GET("/check-availability", h.checkAvailability)
 	g.POST("/login", h.login)
 	g.POST("/verify-password", h.verifyPassword)
 	g.POST("/google/verify", h.verifyGoogleToken)
@@ -253,13 +261,31 @@ func (h *UserHandler) verifyGoogleToken(c *gin.Context) {
 		return
 	}
 
+	avail, _ := h.svc.CheckAvailability(c.Request.Context(), claims.Email, "", "")
+	alreadyRegistered := avail != nil && avail.EmailExists
+
 	c.JSON(http.StatusOK, gin.H{
-		"email":         claims.Email,
-		"emailVerified": claims.EmailVerified,
-		"name":          claims.Name,
-		"picture":       claims.Picture,
-		"subject":       claims.Subject,
+		"email":             claims.Email,
+		"emailVerified":     claims.EmailVerified,
+		"name":              claims.Name,
+		"picture":           claims.Picture,
+		"subject":           claims.Subject,
+		"alreadyRegistered": alreadyRegistered,
 	})
+}
+
+func (h *UserHandler) checkAvailability(c *gin.Context) {
+	email := c.Query("email")
+	phone := c.Query("phone")
+	dni := c.Query("dni")
+
+	res, err := h.svc.CheckAvailability(c.Request.Context(), email, phone, dni)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Code: "CHECK_FAILED", Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
 }
 
 func (h *UserHandler) register(c *gin.Context) {
@@ -274,6 +300,7 @@ func (h *UserHandler) register(c *gin.Context) {
 		Email:             req.Email,
 		Phone:             req.Phone,
 		Password:          req.Password,
+		DNI:               req.DNI,
 		Role:              user.Role(req.Role),
 		UserType:          user.UserType(req.UserType),
 		GoogleIDToken:     req.GoogleIDToken,
@@ -283,8 +310,16 @@ func (h *UserHandler) register(c *gin.Context) {
 	})
 	if err != nil {
 		log.Printf("RegisterUser error: %v (email: %s, role: %s, livenessSessionID: %s)", err, req.Email, req.Role, req.LivenessSessionID)
-		if errors.Is(err, services.ErrUserAlreadyExists) {
-			c.JSON(http.StatusConflict, errorResponse{Code: "USER_ALREADY_EXISTS", Message: "El correo electrónico ya se encuentra registrado."})
+		if errors.Is(err, services.ErrEmailAlreadyRegistered) || errors.Is(err, services.ErrUserAlreadyExists) {
+			c.JSON(http.StatusConflict, errorResponse{Code: "EMAIL_ALREADY_EXISTS", Message: "El correo ya se encuentra registrado. Ingrese un correo electrónico válido."})
+			return
+		}
+		if errors.Is(err, services.ErrPhoneAlreadyRegistered) {
+			c.JSON(http.StatusConflict, errorResponse{Code: "PHONE_ALREADY_EXISTS", Message: "El número de teléfono ya se encuentra registrado. Ingrese un número de teléfono válido."})
+			return
+		}
+		if errors.Is(err, services.ErrDNIAlreadyRegistered) {
+			c.JSON(http.StatusConflict, errorResponse{Code: "DNI_ALREADY_EXISTS", Message: "Ya hay una cuenta con ese DNI registrado."})
 			return
 		}
 		c.JSON(http.StatusBadRequest, errorResponse{Code: "REGISTRATION_FAILED", Message: err.Error()})

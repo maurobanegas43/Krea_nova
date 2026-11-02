@@ -133,3 +133,23 @@ export function validateGmailAddress(email: string): { isValid: boolean; message
   }
   return { isValid: true };
 }
+
+/**
+ * Validates Argentine phone number format (at least 10 digits including area code).
+ */
+export function validatePhoneNumber(raw: string): { isValid: boolean; message?: string } {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 10) {
+    return {
+      isValid: false,
+      message: 'El teléfono debe incluir código de área y número (mínimo 10 dígitos, ej: 11 4000 8800).',
+    };
+  }
+  if (digits.length > 15) {
+    return {
+      isValid: false,
+      message: 'El número de teléfono excede la longitud permitida.',
+    };
+  }
+  return { isValid: true };
+}

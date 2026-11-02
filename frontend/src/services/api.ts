@@ -571,6 +571,25 @@ export const api = {
     return res.ok;
   },
 
+  async checkUserAvailability(params: { email?: string; phone?: string; dni?: string }): Promise<{
+    available: boolean;
+    emailExists: boolean;
+    phoneExists: boolean;
+    dniExists: boolean;
+    message?: string;
+  }> {
+    const query = new URLSearchParams();
+    if (params.email) query.set('email', params.email);
+    if (params.phone) query.set('phone', params.phone);
+    if (params.dni) query.set('dni', params.dni);
+
+    const res = await fetch(`/api/v1/users/check?${query.toString()}`);
+    if (!res.ok) {
+      return { available: true, emailExists: false, phoneExists: false, dniExists: false };
+    }
+    return await res.json();
+  },
+
   async registerInvestor(payload: {
     fullName: string;
     email: string;
@@ -600,6 +619,7 @@ export const api = {
         email: payload.email,
         phone: payload.phone,
         password: payload.password,
+        dni: payload.dni || '',
         role: 'investor',
         userType: 'individual',
         googleIdToken: payload.googleIdToken || '',

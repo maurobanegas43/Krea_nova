@@ -6,7 +6,9 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -122,4 +124,10 @@ func (h *BcryptHasher) HashPassword(password string) (string, error) {
 // ComparePassword compares a hashed password with its possible plaintext equivalent.
 func (h *BcryptHasher) ComparePassword(hash, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+}
+
+// HashSHA256 returns a hex-encoded SHA-256 digest of the input string, suitable for blind index lookups.
+func HashSHA256(val string) string {
+	sum := sha256.Sum256([]byte(val))
+	return hex.EncodeToString(sum[:])
 }

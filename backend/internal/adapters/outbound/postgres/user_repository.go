@@ -3,12 +3,24 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/maurobanegas43/proyecto_final/backend/internal/domain/user"
+	"github.com/maurobanegas43/proyecto_final/backend/internal/security/crypto"
 )
+
+func cleanDigits(s string) string {
+	res := make([]rune, 0, len(s))
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			res = append(res, r)
+		}
+	}
+	return string(res)
+}
 
 type UserRepository struct {
 	pool *pgxpool.Pool
@@ -81,21 +93,129 @@ func (r *UserRepository) FindUserByEmail(ctx context.Context, email string) (*us
 	return &u, nil
 }
 
+// ExistsByEmail queries only a constant 1 to check email presence without retrieving sensitive user columns.
+func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
+	clean := strings.ToLower(strings.TrimSpace(email))
+	if clean == "" {
+		return false, nil
+	}
+	query := `SELECT 1 FROM users WHERE LOWER(email) = $1 LIMIT 1`
+	var exists int
+	err := r.pool.QueryRow(ctx, query, clean).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return exists == 1, nil
+}
+
+// ExistsByPhone queries only a constant 1 to verify whether the phone number is already registered.
+func (r *UserRepository) ExistsByPhone(ctx context.Context, phone string) (bool, error) {
+	digits := cleanDigits(phone)
+	if digits == "" {
+		return false, nil
+	}
+	query := `
+		SELECT 1 FROM users 
+		WHERE phone = $1 
+		   OR regexp_replace(COALESCE(phone, ''), '\D', '', 'g') = $2
+		   OR (length($2) >= 8 AND length(regexp_replace(COALESCE(phone, ''), '\D', '', 'g')) >= 8 
+		       AND RIGHT(regexp_replace(COALESCE(phone, ''), '\D', '', 'g'), 8) = RIGHT($2, 8))
+		LIMIT 1
+	`
+	var exists int
+	err := r.pool.QueryRow(ctx, query, phone, digits).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return exists == 1, nil
+}
+
+// ExistsByDNI queries only a constant 1 using the deterministic DNI blind index hash.
+func (r *UserRepository) ExistsByDNI(ctx context.Context, dni string) (bool, error) {
+	clean := cleanDigits(dni)
+	if clean == "" {
+		return false, nil
+	}
+	hash := crypto.HashSHA256(clean)
+	query := `SELECT 1 FROM investor_profiles WHERE dni_hash = $1 LIMIT 1`
+	var exists int
+	err := r.pool.QueryRow(ctx, query, hash).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return exists == 1, nil
+}
+
+// FindUserByPhone fetches strictly minimal user identity columns (id, email, phone) needed for lookup.
+func (r *UserRepository) FindUserByPhone(ctx context.Context, phone string) (*user.User, error) {
+	digits := cleanDigits(phone)
+	if digits == "" {
+		return nil, nil
+	}
+	query := `SELECT id, email, phone FROM users WHERE phone = $1 OR regexp_replace(COALESCE(phone, ''), '\D', '', 'g') = $2 LIMIT 1`
+	row := r.pool.QueryRow(ctx, query, phone, digits)
+
+	var u user.User
+	var phoneVal *string
+	err := row.Scan(&u.ID, &u.Email, &phoneVal)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if phoneVal != nil {
+		u.Phone = *phoneVal
+	}
+	return &u, nil
+}
+
+// FindInvestorProfileByDNI fetches strictly minimal profile reference (id, user_id) needed for validation.
+func (r *UserRepository) FindInvestorProfileByDNI(ctx context.Context, dni string) (*user.InvestorProfile, error) {
+	clean := cleanDigits(dni)
+	if clean == "" {
+		return nil, nil
+	}
+	hash := crypto.HashSHA256(clean)
+	query := `SELECT id, user_id, COALESCE(dni_hash, '') FROM investor_profiles WHERE dni_hash = $1 LIMIT 1`
+	row := r.pool.QueryRow(ctx, query, hash)
+
+	var p user.InvestorProfile
+	err := row.Scan(&p.ID, &p.UserID, &p.DNIHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
 func (r *UserRepository) SaveInvestorProfile(ctx context.Context, p *user.InvestorProfile) error {
 	query := `
 		INSERT INTO investor_profiles (
-			id, user_id, full_name, dni_encrypted, cuil_encrypted, birth_date,
+			id, user_id, full_name, dni_encrypted, dni_hash, cuil_encrypted, birth_date,
 			address_encrypted, city, province, funds_origin, is_pep, is_obligated_subject,
 			kyc_status, verified_at, phone, payout_currency, bank_cbu_or_alias,
 			bank_name, web3_wallet_address, auto_reinvest_yield, two_factor_enabled,
 			notify_construction_alerts, notify_audit_reports, notify_early_access
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-			$15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+			$15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
 		)
 		ON CONFLICT (user_id) DO UPDATE SET
 			full_name = EXCLUDED.full_name,
 			dni_encrypted = EXCLUDED.dni_encrypted,
+			dni_hash = EXCLUDED.dni_hash,
 			cuil_encrypted = EXCLUDED.cuil_encrypted,
 			birth_date = EXCLUDED.birth_date,
 			address_encrypted = EXCLUDED.address_encrypted,
@@ -118,7 +238,7 @@ func (r *UserRepository) SaveInvestorProfile(ctx context.Context, p *user.Invest
 			notify_early_access = EXCLUDED.notify_early_access
 	`
 	_, err := r.pool.Exec(ctx, query,
-		p.ID, p.UserID, p.FullName, p.DNIEncrypted, p.CUILEncrypted, p.BirthDate,
+		p.ID, p.UserID, p.FullName, p.DNIEncrypted, p.DNIHash, p.CUILEncrypted, p.BirthDate,
 		p.AddressEncrypted, p.City, p.Province, p.FundsOrigin, p.IsPEP, p.IsObligatedSubject,
 		string(p.KYCStatus), p.VerifiedAt, p.Phone, p.PayoutCurrency, p.BankCbuOrAlias,
 		p.BankName, p.Web3WalletAddress, p.AutoReinvestYield, p.TwoFactorEnabled,
@@ -137,7 +257,7 @@ func (r *UserRepository) SaveInvestorProfile(ctx context.Context, p *user.Invest
 
 func (r *UserRepository) FindInvestorProfileByUserID(ctx context.Context, userID string) (*user.InvestorProfile, error) {
 	query := `
-		SELECT id, user_id, full_name, dni_encrypted, cuil_encrypted, birth_date,
+		SELECT id, user_id, full_name, dni_encrypted, COALESCE(dni_hash, ''), cuil_encrypted, birth_date,
 		       address_encrypted, city, province, funds_origin, is_pep, is_obligated_subject,
 		       kyc_status, verified_at,
 		       COALESCE(phone, ''), COALESCE(payout_currency, 'USD'), COALESCE(bank_cbu_or_alias, ''),
@@ -151,7 +271,7 @@ func (r *UserRepository) FindInvestorProfileByUserID(ctx context.Context, userID
 	var p user.InvestorProfile
 	var kyc string
 	err := row.Scan(
-		&p.ID, &p.UserID, &p.FullName, &p.DNIEncrypted, &p.CUILEncrypted, &p.BirthDate,
+		&p.ID, &p.UserID, &p.FullName, &p.DNIEncrypted, &p.DNIHash, &p.CUILEncrypted, &p.BirthDate,
 		&p.AddressEncrypted, &p.City, &p.Province, &p.FundsOrigin, &p.IsPEP, &p.IsObligatedSubject,
 		&kyc, &p.VerifiedAt,
 		&p.Phone, &p.PayoutCurrency, &p.BankCbuOrAlias, &p.BankName, &p.Web3WalletAddress,

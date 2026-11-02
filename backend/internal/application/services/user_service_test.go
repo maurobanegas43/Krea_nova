@@ -313,5 +313,95 @@ func TestUserService_LivenessSessionLifecycleAndSecurity(t *testing.T) {
 	}
 }
 
+func TestUserService_CheckAvailabilityAndUniquenessConstraints(t *testing.T) {
+	ctx := context.Background()
+	userRepo := memory.NewUserRepository()
+	key := []byte("12345678901234567890123456789012")
+	encryptor, _ := crypto.NewAESGCMEncryptor(key)
+	hasher := crypto.NewBcryptHasher(10)
+	idGen := memory.RandomID{}
+	clock := memory.SystemClock{}
+
+	svc := services.NewUserService(userRepo, encryptor, hasher, idGen, clock)
+
+	// 1. Initial check - all available
+	avail, err := svc.CheckAvailability(ctx, "inversor.demo@gmail.com", "+5491133334444", "38999111")
+	if err != nil {
+		t.Fatalf("unexpected error checking availability: %v", err)
+	}
+	if !avail.Available || avail.EmailExists || avail.PhoneExists || avail.DNIExists {
+		t.Fatalf("expected all available, got %+v", avail)
+	}
+
+	// 2. Register first user with email, phone and DNI
+	_, err = svc.RegisterUser(ctx, services.RegisterUserCommand{
+		Email:    "inversor.demo@gmail.com",
+		Phone:    "+5491133334444",
+		DNI:      "38999111",
+		Password: "Password123!",
+		Role:     user.RoleInvestor,
+		UserType: user.UserTypeIndividual,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error registering user: %v", err)
+	}
+
+	// 3. Check availability when already taken
+	checkEmail, _ := svc.CheckAvailability(ctx, "inversor.demo@gmail.com", "", "")
+	if checkEmail.Available || !checkEmail.EmailExists {
+		t.Fatalf("expected email taken, got %+v", checkEmail)
+	}
+
+	checkPhone, _ := svc.CheckAvailability(ctx, "", "11 3333-4444", "")
+	if checkPhone.Available || !checkPhone.PhoneExists {
+		t.Fatalf("expected phone taken, got %+v", checkPhone)
+	}
+
+	checkDNI, _ := svc.CheckAvailability(ctx, "", "", "38.999.111")
+	if checkDNI.Available || !checkDNI.DNIExists {
+		t.Fatalf("expected DNI taken, got %+v", checkDNI)
+	}
+
+	// 4. Try duplicate registration - must fail with appropriate errors
+	// Duplicate email
+	_, err = svc.RegisterUser(ctx, services.RegisterUserCommand{
+		Email:    "inversor.demo@gmail.com",
+		Phone:    "+5491188889999",
+		DNI:      "37000111",
+		Password: "Password123!",
+		Role:     user.RoleInvestor,
+		UserType: user.UserTypeIndividual,
+	})
+	if err != services.ErrEmailAlreadyRegistered {
+		t.Fatalf("expected ErrEmailAlreadyRegistered, got %v", err)
+	}
+
+	// Duplicate phone
+	_, err = svc.RegisterUser(ctx, services.RegisterUserCommand{
+		Email:    "otro.inversor@gmail.com",
+		Phone:    "+5491133334444",
+		DNI:      "37000111",
+		Password: "Password123!",
+		Role:     user.RoleInvestor,
+		UserType: user.UserTypeIndividual,
+	})
+	if err != services.ErrPhoneAlreadyRegistered {
+		t.Fatalf("expected ErrPhoneAlreadyRegistered, got %v", err)
+	}
+
+	// Duplicate DNI
+	_, err = svc.RegisterUser(ctx, services.RegisterUserCommand{
+		Email:    "otro.inversor@gmail.com",
+		Phone:    "+5491188889999",
+		DNI:      "38999111",
+		Password: "Password123!",
+		Role:     user.RoleInvestor,
+		UserType: user.UserTypeIndividual,
+	})
+	if err != services.ErrDNIAlreadyRegistered {
+		t.Fatalf("expected ErrDNIAlreadyRegistered, got %v", err)
+	}
+}
+
 // Ensure interface compliance
 var _ = time.Now

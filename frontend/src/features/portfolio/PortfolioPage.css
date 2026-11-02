@@ -10,36 +10,140 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
   padding-bottom: 80px;
   color: var(--text-primary);
+
+  /* Theme-aware semantic tokens (same hues, contrast tuned per theme) */
+  --pf-positive: #10b981;
+  --pf-negative: #ef4444;
+  --pf-warning: #f59e0b;
+  --pf-info: #3b82f6;
+  --pf-track: rgba(255, 255, 255, 0.06);
+  --pf-chip-bg: rgba(255, 255, 255, 0.03);
+  --pf-hero-bg: linear-gradient(135deg, rgba(24, 24, 27, 0.95) 0%, rgba(18, 18, 21, 0.95) 100%);
+  --pf-row-hover-border: rgba(59, 130, 246, 0.35);
+}
+
+/* Light theme: darker shades of the same hues to reach WCAG AA (>= 4.5:1) on white */
+[data-theme="light"] .portfolio-root {
+  --pf-positive: #047857;
+  --pf-negative: #dc2626;
+  --pf-warning: #b45309;
+  --pf-info: #1d4ed8;
+  --pf-track: #e2e8f0;
+  --pf-chip-bg: #f8fafc;
+  --pf-hero-bg: var(--surface-card);
+  --pf-row-hover-border: rgba(29, 78, 216, 0.3);
+}
+
+[data-theme="light"] .portfolio-weight-badge {
+  /* Small text: neutral ink keeps it legible; the colored border keeps the series link */
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .portfolio-donut-svg {
+  filter: none;
 }
 
 /* --------------------------------------------------------------------------
-   1. Encabezado limpio: solo título y botones de acción
+   1. Header secundario (Pestañas a la izquierda, Acciones a la derecha)
    -------------------------------------------------------------------------- */
-.portfolio-header {
+.portfolio-secondary-header {
+  /* Single full-width bar: tabs on the left, actions on the right */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
   gap: 16px;
-  margin-top: 4px;
-}
-
-.portfolio-title {
-  font-size: 26px;
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-  line-height: 1.2;
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 12px;
+  padding: 4px;
 }
 
 .portfolio-header__actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.portfolio-header__actions .portfolio-btn {
+  min-height: 36px;
+  padding: 8px 18px;
+  border-radius: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   2. Saldo en cuenta (Zona común para todas las pestañas)
+   -------------------------------------------------------------------------- */
+.portfolio-common-balance-card {
+  background: var(--pf-hero-bg);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  /* Horizontal hero: amount anchors the left, context reads on the right */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  column-gap: 32px;
+  row-gap: 8px;
+}
+
+.portfolio-common-balance-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.portfolio-common-balance-value {
+  font-size: 38px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum";
+}
+
+.portfolio-common-balance-value.negative {
+  color: var(--pf-negative);
+}
+
+.portfolio-common-balance-desc {
+  color: var(--text-muted);
+  font-size: 13.5px;
+  margin: 0;
+  max-width: 520px;
+  line-height: 1.5;
+  padding-left: 32px;
+  border-left: 1px solid var(--surface-glass-border);
+  justify-self: end;
+  padding-bottom: 4px;
+}
+
+/* Shared vertical rhythm for the content of each tab */
+.portfolio-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* Wallet rails: equal-height cards side by side */
+.portfolio-wallet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.portfolio-rail-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -138,7 +242,7 @@
 }
 
 .portfolio-kpi-value.negative {
-  color: #ef4444;
+  color: var(--pf-negative);
 }
 
 .portfolio-kpi-badge {
@@ -150,13 +254,13 @@
 
 .portfolio-kpi-badge.available {
   background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
+  color: var(--pf-positive);
   border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .portfolio-kpi-badge.warning {
   background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  color: var(--pf-negative);
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
@@ -167,47 +271,133 @@
 }
 
 /* --------------------------------------------------------------------------
-   3. Distribución de inversiones (Gráfico circular con leyenda simple)
+   3. Distribución de inversiones (Reporte Macroeconómico Institucional)
    -------------------------------------------------------------------------- */
 .portfolio-diversification-card {
   background: var(--surface-card);
   border: 1px solid var(--surface-glass-border);
   border-radius: 16px;
-  padding: 24px 28px;
+  padding: 24px;
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.portfolio-card-title {
-  font-size: 17px;
+.portfolio-diversification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.portfolio-econ-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  color: var(--pf-info);
+  font-size: 11px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.portfolio-card-title {
+  font-size: 18px;
+  font-weight: 700;
   margin: 0;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+}
+
+/* Indicadores macroeconómicos estilo Bloomberg / Morgan Stanley */
+.portfolio-econ-kpis {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.portfolio-econ-kpi-item {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-width: 128px;
+}
+
+.portfolio-econ-kpi-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.portfolio-econ-kpi-value {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-feature-settings: "tnum";
+}
+
+/* Barra Macro Continua de Asignación (Allocation Continuum) */
+.portfolio-allocation-bar-container {
+  width: 100%;
+}
+
+.portfolio-allocation-bar {
+  display: flex;
+  width: 100%;
+  height: 9px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--color-surface-raised);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.portfolio-allocation-bar-segment {
+  height: 100%;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+
+.portfolio-allocation-bar-segment.is-active {
+  transform: scaleY(1.3);
+  filter: brightness(1.2);
 }
 
 .portfolio-donut-layout {
-  display: flex;
+  /* Two-column analytical split: compact chart left, ranked matrix right */
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
   align-items: center;
-  gap: 40px;
-  flex-wrap: wrap;
+  gap: 32px;
 }
 
 .portfolio-donut-wrapper {
   position: relative;
-  width: 160px;
-  height: 160px;
+  width: 190px;
+  height: 190px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
+  justify-self: center;
 }
 
 .portfolio-donut-svg {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
 }
 
 .portfolio-donut-center {
@@ -222,41 +412,77 @@
 }
 
 .portfolio-donut-center__label {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 10.5px;
+  font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .portfolio-donut-center__value {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: var(--text-primary);
   line-height: 1.2;
+  font-feature-settings: "tnum";
 }
 
-/* Leyenda simple en formato lista: Proyecto — Monto invertido — Porcentaje */
-.portfolio-donut-list {
+.portfolio-donut-center__sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Matriz Ejecutiva Institucional de Activos */
+.portfolio-asset-matrix {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  flex: 1;
-  min-width: 280px;
+  min-width: 0;
+  padding-left: 32px;
+  border-left: 1px solid var(--surface-glass-border);
 }
 
-.portfolio-donut-row {
+.portfolio-matrix-head {
+  display: grid;
+  grid-template-columns: 2fr 1.6fr 1.4fr 1fr;
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--surface-glass-border);
+}
+
+.portfolio-matrix-body {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--color-surface-raised);
-  border-radius: 8px;
-  gap: 16px;
-  font-size: 14px;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
 }
 
-.portfolio-donut-row__left {
+.portfolio-matrix-row {
+  display: grid;
+  grid-template-columns: 2fr 1.6fr 1.4fr 1fr;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--color-surface-raised);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: all 180ms ease;
+  cursor: pointer;
+}
+
+.portfolio-matrix-row:hover,
+.portfolio-matrix-row.is-hovered {
+  background: var(--surface-card);
+  border-color: var(--pf-row-hover-border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  transform: translateX(2px);
+}
+
+.portfolio-matrix-col-asset {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -264,54 +490,104 @@
 }
 
 .portfolio-donut-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
 }
 
-.portfolio-donut-row__name {
-  font-weight: 500;
+.portfolio-matrix-asset-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.portfolio-matrix-asset-name {
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.portfolio-donut-row__right {
+.portfolio-matrix-asset-category {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.portfolio-matrix-col-weight {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 10px;
+  padding: 0 8px;
 }
 
-.portfolio-donut-row__amount {
-  font-weight: 600;
-  color: var(--text-primary);
+.portfolio-weight-bar-bg {
+  flex: 1;
+  height: 5px;
+  background: var(--pf-track);
+  border-radius: 3px;
+  overflow: hidden;
 }
 
-.portfolio-donut-row__sep {
-  color: var(--text-subtle);
+.portfolio-weight-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 300ms ease;
 }
 
-.portfolio-donut-row__percent {
-  font-weight: 500;
-  color: var(--text-muted);
+.portfolio-weight-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-feature-settings: "tnum";
   min-width: 44px;
   text-align: right;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--pf-chip-bg);
+  border: 1px solid;
+}
+
+.portfolio-matrix-col-amount {
+  text-align: right;
+}
+
+.portfolio-matrix-usd {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-feature-settings: "tnum";
+}
+
+.portfolio-matrix-col-yield {
+  text-align: right;
+}
+
+.portfolio-matrix-apy {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pf-positive);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-feature-settings: "tnum";
 }
 
 /* --------------------------------------------------------------------------
    4. Pestañas de navegación de tablas
    -------------------------------------------------------------------------- */
 .portfolio-tabs {
-  display: inline-flex;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--surface-glass-border);
-  border-radius: 12px;
-  padding: 4px;
+  display: flex;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   gap: 4px;
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .portfolio-tab-btn {
@@ -365,7 +641,7 @@
 }
 
 .portfolio-table th {
-  padding: 14px 20px;
+  padding: 12px 24px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-muted);
@@ -375,7 +651,7 @@
 }
 
 .portfolio-table td {
-  padding: 16px 20px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--table-border);
   color: var(--text-primary);
   vertical-align: middle;
@@ -506,4 +782,122 @@
   padding: 18px 24px;
   border-top: 1px solid var(--surface-glass-border);
   background: var(--color-surface-raised);
+}
+
+/* --------------------------------------------------------------------------
+   Adaptación Responsiva Tablet
+   -------------------------------------------------------------------------- */
+@media (max-width: 960px) {
+  .portfolio-donut-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .portfolio-asset-matrix {
+    padding-left: 0;
+    border-left: none;
+    padding-top: 20px;
+    border-top: 1px solid var(--surface-glass-border);
+  }
+
+  .portfolio-econ-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .portfolio-econ-kpi-item {
+    min-width: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Adaptación Responsiva Móvil
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .portfolio-root {
+    gap: 16px;
+  }
+
+  .portfolio-common-balance-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portfolio-common-balance-desc {
+    justify-self: start;
+    padding-left: 0;
+    border-left: none;
+    padding-bottom: 0;
+  }
+
+  .portfolio-diversification-card {
+    padding: 20px;
+  }
+
+  .portfolio-econ-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portfolio-table th {
+    padding: 12px 16px;
+  }
+
+  .portfolio-table td {
+    padding: 16px;
+  }
+
+  .portfolio-common-balance-card {
+    padding: 16px 20px;
+  }
+
+  .portfolio-rail-card {
+    padding: 20px;
+  }
+  .portfolio-secondary-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .portfolio-tabs {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .portfolio-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .portfolio-tab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .portfolio-header__actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .portfolio-header__actions .portfolio-btn {
+    width: 100%;
+  }
+
+
+  .portfolio-common-balance-value {
+    font-size: 28px;
+  }
+
+  .portfolio-matrix-head,
+  .portfolio-matrix-row {
+    grid-template-columns: 1.8fr 1.2fr 1fr;
+  }
+
+  .portfolio-matrix-col-yield {
+    display: none;
+  }
 }

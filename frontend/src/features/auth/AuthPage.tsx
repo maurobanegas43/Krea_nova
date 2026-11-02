@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -18,6 +18,8 @@ import {
   Laptop,
   CheckCircle2,
   Fingerprint,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -25,6 +27,9 @@ import { api } from '../../services/api';
 import {
   validatePassword,
   validateEmail,
+  validateGmailAddress,
+  validateDni,
+  validatePhoneNumber,
 } from './legalValidation';
 import { GoogleLoginButton } from './components/GoogleLoginButton';
 import { FaceLivenessVerification, LivenessProofResult } from './components/FaceLivenessVerification';
@@ -39,6 +44,28 @@ export const AuthPage: React.FC = () => {
   // Mode: login or register
   const [isLogin, setIsLogin] = useState<boolean>(searchParams.get('mode') !== 'register');
   const [role, setRole] = useState<'investor' | 'developer'>('investor');
+
+  // Account type dropdown (replaces the two side-by-side profile cards)
+  const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+  const roleMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isRoleMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(e.target as Node)) {
+        setIsRoleMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsRoleMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isRoleMenuOpen]);
 
   // Step state for register wizard (Investor: 1: Contact, 2: FaceX Liveness, 3: Legal Data, 4: Declarations)
   const [registerStep, setRegisterStep] = useState<number>(1);
@@ -67,10 +94,14 @@ export const AuthPage: React.FC = () => {
 
   // Investor specific fields
   const [fullName, setFullName] = useState('');
+  const [dni, setDni] = useState('');
 
   // Corporate specific fields
   const [companyName, setCompanyName] = useState('');
   const [tradeName, setTradeName] = useState('');
+
+  // Step 1 validation state
+  const [isValidatingStep1, setIsValidatingStep1] = useState(false);
 
   // Form error states
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -223,8 +254,12 @@ export const AuthPage: React.FC = () => {
   const handleGoogleRegisterSuccess = async (data: { email: string; name?: string; picture?: string; idToken: string }) => {
     setGoogleRegisterLoading(false);
     setGoogleAuthNotice(null);
+    setFormErrors((prev) => {
+      const copy = { ...prev };
+      delete copy.googleAuth;
+      return copy;
+    });
 
-    // Verify token with backend
     try {
       const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1';
       const verifyRes = await fetch(`${apiBase}/auth/google/verify`, {
@@ -233,49 +268,146 @@ export const AuthPage: React.FC = () => {
         body: JSON.stringify({ idToken: data.idToken }),
       });
 
+      let candidateEmail = data.email;
+      let candidateName = data.name;
+      let isAlreadyRegistered = false;
+
       if (verifyRes.ok) {
         const verifiedData = await verifyRes.json();
-        if (verifiedData.name && !fullName) {
-          setFullName(verifiedData.name);
-        }
-        if (verifiedData.email) {
-          setEmail(verifiedData.email);
-          setGoogleVerifiedEmail(verifiedData.email);
-        }
-      } else {
-        if (data.name && !fullName) setFullName(data.name);
-        if (data.email) {
-          setEmail(data.email);
-          setGoogleVerifiedEmail(data.email);
-        }
+        if (verifiedData.email) candidateEmail = verifiedData.email;
+        if (verifiedData.name) candidateName = verifiedData.name;
+        if (verifiedData.alreadyRegistered) isAlreadyRegistered = true;
       }
+
+      // Validar si la cuenta de Google ya se encuentra en la base de datos
+      if (!isAlreadyRegistered) {
+        const check = await api.checkUserAvailability({ email: candidateEmail });
+        if (check.emailExists) isAlreadyRegistered = true;
+      }
+
+      if (isAlreadyRegistered) {
+        setGoogleIdToken(null);
+        setGoogleVerifiedEmail(null);
+        setGoogleAuthNotice(null);
+        setFormErrors((prev) => ({
+          ...prev,
+          email: 'El correo ingresado ya está registrado. Ingrese otro correo o inicie sesión.',
+          googleAuth: `La cuenta de Google (${candidateEmail}) ya está registrada en el sistema. No podés crear una cuenta duplicada. Por favor iniciá sesión con tus credenciales.`,
+          step1: 'El correo ingresado ya está registrado. Ingrese otro correo o inicie sesión con su cuenta.',
+        }));
+        return;
+      }
+
+      // Si no está registrado, se autocompletan los datos y se habilita la continuidad
+      if (candidateName && !fullName) {
+        setFullName(candidateName);
+      }
+      if (candidateEmail) {
+        setEmail(candidateEmail);
+        setGoogleVerifiedEmail(candidateEmail);
+      }
+      setGoogleIdToken(data.idToken);
+      setGoogleAuthNotice('✓ Cuenta de Google validada y disponible. Podés continuar con el registro.');
+      setFormErrors((prev) => {
+        const copy = { ...prev };
+        delete copy.email;
+        delete copy.googleAuth;
+        delete copy.step1;
+        return copy;
+      });
     } catch {
+      // Verificación de respaldo ante contingencias de red
+      const check = await api.checkUserAvailability({ email: data.email });
+      if (check.emailExists) {
+        setGoogleIdToken(null);
+        setGoogleVerifiedEmail(null);
+        setGoogleAuthNotice(null);
+        setFormErrors((prev) => ({
+          ...prev,
+          email: 'El correo ingresado ya está registrado. Ingrese otro correo o inicie sesión.',
+          googleAuth: `La cuenta de Google (${data.email}) ya está registrada en el sistema. Por favor iniciá sesión.`,
+          step1: 'El correo ingresado ya está registrado. Ingrese otro correo o inicie sesión con su cuenta.',
+        }));
+        return;
+      }
+
       if (data.name && !fullName) setFullName(data.name);
       if (data.email) {
         setEmail(data.email);
         setGoogleVerifiedEmail(data.email);
       }
+      setGoogleIdToken(data.idToken);
+      setGoogleAuthNotice('✓ Cuenta de Google validada y disponible para el registro.');
+      setFormErrors((prev) => {
+        const copy = { ...prev };
+        delete copy.email;
+        delete copy.googleAuth;
+        delete copy.step1;
+        return copy;
+      });
     }
-
-    setGoogleIdToken(data.idToken);
-    setGoogleAuthNotice('✓ Datos completados desde tu cuenta de Google. Podés editarlos libremente.');
-    setFormErrors((prev) => {
-      const copy = { ...prev };
-      delete copy.email;
-      delete copy.fullName;
-      delete copy.companyName;
-      delete copy.googleAuth;
-      return copy;
-    });
   };
 
-  // Step 1 Validation (Contact & Personal Data)
-  const validateStep1 = (): boolean => {
+  // Real-time single field availability check on blur
+  const checkSingleFieldAvailability = async (field: 'email' | 'phone' | 'dni', value: string) => {
+    const cleanVal = value.trim();
+    if (!cleanVal) return;
+
+    if (field === 'dni' && role === 'investor') {
+      const c = validateDni(cleanVal);
+      if (!c.isValid) return;
+      try {
+        const res = await api.checkUserAvailability({ dni: cleanVal });
+        if (res.dniExists) {
+          setFormErrors((prev) => ({
+            ...prev,
+            dni: 'El DNI ingresado ya está registrado. Ya existe una cuenta asociada a este documento.',
+            step1: 'El DNI ingresado ya está registrado. Ingrese otro documento o inicie sesión.',
+          }));
+        }
+      } catch {}
+    } else if (field === 'phone') {
+      const c = validatePhoneNumber(cleanVal);
+      if (!c.isValid) return;
+      try {
+        const res = await api.checkUserAvailability({ phone: cleanVal });
+        if (res.phoneExists) {
+          setFormErrors((prev) => ({
+            ...prev,
+            phone: 'El número de teléfono ya está registrado. Ingrese otro número de teléfono.',
+            step1: 'El número de teléfono ya está registrado. Ingrese otro número de teléfono.',
+          }));
+        }
+      } catch {}
+    } else if (field === 'email') {
+      const c = role === 'investor' ? validateGmailAddress(cleanVal) : validateEmail(cleanVal);
+      if (!c.isValid) return;
+      try {
+        const res = await api.checkUserAvailability({ email: cleanVal });
+        if (res.emailExists) {
+          setFormErrors((prev) => ({
+            ...prev,
+            email: 'El correo ingresado ya está registrado. Ingrese otro correo o inicie sesión.',
+            step1: 'El correo ingresado ya está registrado. Ingrese otro correo o inicie sesión.',
+          }));
+        }
+      } catch {}
+    }
+  };
+
+  // Step 1 Validation Sequence (Contact, Personal Data & Database Uniqueness before Biometrics)
+  const validateStep1 = async (): Promise<boolean> => {
     const errors: Record<string, string> = {};
 
+    // 1. Validar Nombre
     if (role === 'investor') {
       if (!fullName.trim() || fullName.trim().split(' ').length < 2) {
         errors.fullName = 'Ingrese su nombre y apellido completos (mínimo 2 palabras).';
+      }
+      // 2. Validar DNI
+      const dniCheck = validateDni(dni);
+      if (!dniCheck.isValid) {
+        errors.dni = dniCheck.message || 'El DNI debe tener entre 7 y 8 dígitos numéricos.';
       }
     } else {
       if (!companyName.trim()) {
@@ -283,18 +415,70 @@ export const AuthPage: React.FC = () => {
       }
     }
 
-    const emailCheck = validateEmail(email);
-    if (!emailCheck.isValid) {
-      errors.email = emailCheck.message || 'Email inválido';
+    // 3. Validar Correo Electrónico
+    if (role === 'investor') {
+      const gmailCheck = validateGmailAddress(email);
+      if (!gmailCheck.isValid) {
+        errors.email = gmailCheck.message || 'Para inversores, se requiere una casilla oficial @gmail.com válida.';
+      }
+    } else {
+      const emailCheck = validateEmail(email);
+      if (!emailCheck.isValid) {
+        errors.email = emailCheck.message || 'Email corporativo inválido.';
+      }
     }
 
-    if (!phone.trim() || phone.trim().length < 8) {
-      errors.phone = 'Ingrese un número telefónico de contacto válido con código de área.';
+    // 4. Validar Teléfono
+    const phoneCheck = validatePhoneNumber(phone);
+    if (!phoneCheck.isValid) {
+      errors.phone = phoneCheck.message || 'Ingrese un número telefónico de contacto válido con código de área.';
     }
 
+    // 5. Validar Contraseña
     const pwdCheck = validatePassword(password);
     if (!pwdCheck.isValid) {
       errors.password = pwdCheck.message || 'La contraseña debe contener al menos 8 caracteres, mayúscula, minúscula y número.';
+    }
+
+    // Si existen fallos de formato, detener la secuencia antes de consultar la DB o avanzar
+    if (Object.keys(errors).length > 0) {
+      errors.step1 = 'Por favor complete o corrija los campos marcados en rojo antes de continuar a la biometría.';
+      setFormErrors(errors);
+      return false;
+    }
+
+    // 6. Validación secuencial estricta contra la Base de Datos antes de ir a biometría
+    setIsValidatingStep1(true);
+    try {
+      const avail = await api.checkUserAvailability({
+        email: email.trim(),
+        phone: phone.trim(),
+        dni: role === 'investor' && dni.trim() ? dni.trim() : undefined,
+      });
+
+      if (!avail.available) {
+        const reasons: string[] = [];
+        if (avail.emailExists) {
+          errors.email = 'El correo ingresado ya está registrado. Ingrese otro correo o inicie sesión.';
+          reasons.push('el correo ingresado ya está registrado (ingrese otro correo)');
+        }
+        if (avail.dniExists) {
+          errors.dni = 'El DNI ingresado ya está registrado. Ya existe una cuenta asociada a este documento.';
+          reasons.push('el DNI ingresado ya está registrado');
+        }
+        if (avail.phoneExists) {
+          errors.phone = 'El número de teléfono ya está registrado. Ingrese otro número de teléfono.';
+          reasons.push('el número de teléfono ya está registrado (ingrese otro número)');
+        }
+
+        errors.step1 = `No es posible continuar con el registro: ${reasons.join(', ')}. Cada usuario puede tener una única cuenta en la plataforma.`;
+        setFormErrors(errors);
+        return false;
+      }
+    } catch (err: any) {
+      console.warn('Error verificando disponibilidad previa a biometría:', err);
+    } finally {
+      setIsValidatingStep1(false);
     }
 
     setFormErrors(errors);
@@ -306,7 +490,8 @@ export const AuthPage: React.FC = () => {
     e.preventDefault();
 
     if (registerStep === 1) {
-      if (validateStep1()) {
+      const isValid = await validateStep1();
+      if (isValid) {
         setRegisterStep(2);
       }
       return;
@@ -327,7 +512,7 @@ export const AuthPage: React.FC = () => {
           email,
           password,
           phone,
-          dni: '',
+          dni,
           cuil: '',
           birthDate: '2000-01-01',
           address: '',
@@ -369,8 +554,14 @@ export const AuthPage: React.FC = () => {
       navigate('/app');
     } catch (err: any) {
       const msg = err.message || 'Error registrando usuario';
-      if (msg.toLowerCase().includes('ya se encuentra registrado') || msg.toLowerCase().includes('already exists')) {
-        setFormErrors({ email: 'Este correo electrónico ya se encuentra registrado. ¿Deseás iniciar sesión?' });
+      if (msg.toLowerCase().includes('dni') || msg.includes('DNI_ALREADY_EXISTS')) {
+        setFormErrors({ dni: 'Ya hay una cuenta con ese DNI registrado.' });
+        setRegisterStep(1);
+      } else if (msg.toLowerCase().includes('teléfono') || msg.toLowerCase().includes('telefono') || msg.includes('phone') || msg.includes('PHONE_ALREADY_EXISTS')) {
+        setFormErrors({ phone: 'El número de teléfono ya se encuentra registrado. Ingrese un número de teléfono válido.' });
+        setRegisterStep(1);
+      } else if (msg.toLowerCase().includes('correo') || msg.toLowerCase().includes('email') || msg.includes('EMAIL_ALREADY_EXISTS') || msg.toLowerCase().includes('already exists')) {
+        setFormErrors({ email: 'El correo ya se encuentra registrado. Ingrese un correo electrónico válido.' });
         setRegisterStep(1);
       } else {
         setFormErrors({ general: msg });
@@ -1249,67 +1440,126 @@ export const AuthPage: React.FC = () => {
                 Seleccioná el Tipo de Cuenta
               </label>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRole('investor');
-                    setRegisterStep(1);
-                    setFormErrors({});
-                  }}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    gap: '6px',
-                    padding: '14px 16px',
-                    borderRadius: '16px',
-                    border: `2px solid ${role === 'investor' ? 'var(--text-primary)' : 'var(--surface-glass-border)'}`,
-                    background: role === 'investor' ? 'var(--color-surface-raised)' : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all var(--transition-fast)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                    <UserCheck size={18} style={{ color: role === 'investor' ? 'var(--text-primary)' : 'var(--text-muted)' }} />
-                    <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>Inversor</strong>
-                  </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    Persona Humana. Invertí en desarrollos premium desde $500 USD.
-                  </span>
-                </button>
+              {(() => {
+                const roleOptions = [
+                  {
+                    value: 'investor' as const,
+                    label: 'Inversor',
+                    description: 'Persona Humana. Invertí en desarrollos premium desde $500 USD.',
+                    Icon: UserCheck,
+                  },
+                  {
+                    value: 'developer' as const,
+                    label: 'Constructora',
+                    description: 'Persona Jurídica. Presentá proyectos para captar financiamiento.',
+                    Icon: Building2,
+                  },
+                ];
+                const selected = roleOptions.find((o) => o.value === role) ?? roleOptions[0];
+                const SelectedIcon = selected.Icon;
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRole('developer');
-                    setRegisterStep(1);
-                    setFormErrors({});
-                  }}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    gap: '6px',
-                    padding: '14px 16px',
-                    borderRadius: '16px',
-                    border: `2px solid ${role === 'developer' ? 'var(--text-primary)' : 'var(--surface-glass-border)'}`,
-                    background: role === 'developer' ? 'var(--color-surface-raised)' : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all var(--transition-fast)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                    <Building2 size={18} style={{ color: role === 'developer' ? 'var(--text-primary)' : 'var(--text-muted)' }} />
-                    <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>Constructora</strong>
+                return (
+                  <div ref={roleMenuRef} style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      aria-haspopup="listbox"
+                      aria-expanded={isRoleMenuOpen}
+                      onClick={() => setIsRoleMenuOpen((open) => !open)}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '14px 16px',
+                        borderRadius: '16px',
+                        border: `2px solid ${isRoleMenuOpen ? 'var(--text-primary)' : 'var(--surface-glass-border)'}`,
+                        background: 'var(--color-surface-raised)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all var(--transition-fast)',
+                      }}
+                    >
+                      <SelectedIcon size={18} style={{ color: 'var(--text-primary)', flexShrink: 0 }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 }}>
+                        <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{selected.label}</strong>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                          {selected.description}
+                        </span>
+                      </div>
+                      <ChevronDown
+                        size={18}
+                        style={{
+                          color: 'var(--text-muted)',
+                          flexShrink: 0,
+                          transform: isRoleMenuOpen ? 'rotate(180deg)' : 'none',
+                          transition: 'transform var(--transition-fast)',
+                        }}
+                      />
+                    </button>
+
+                    {isRoleMenuOpen && (
+                      <div
+                        role="listbox"
+                        aria-label="Tipo de cuenta"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 8px)',
+                          left: 0,
+                          right: 0,
+                          zIndex: 20,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          padding: '6px',
+                          borderRadius: '16px',
+                          border: '1px solid var(--surface-glass-border)',
+                          background: 'var(--surface-card)',
+                          boxShadow: 'var(--shadow-elevation)',
+                        }}
+                      >
+                        {roleOptions.map(({ value, label, description, Icon }) => {
+                          const isSelected = role === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => {
+                                if (!isSelected) {
+                                  setRole(value);
+                                  setRegisterStep(1);
+                                  setFormErrors({});
+                                }
+                                setIsRoleMenuOpen(false);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                padding: '12px 14px',
+                                borderRadius: '12px',
+                                border: 'none',
+                                background: isSelected ? 'var(--color-surface-raised)' : 'transparent',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                transition: 'background var(--transition-fast)',
+                              }}
+                            >
+                              <Icon size={18} style={{ color: isSelected ? 'var(--text-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 }}>
+                                <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{label}</strong>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>{description}</span>
+                              </div>
+                              {isSelected && <Check size={16} style={{ color: 'var(--text-primary)', flexShrink: 0 }} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    Persona Jurídica. Presentá proyectos para captar financiamiento.
-                  </span>
-                </button>
-              </div>
+                );
+              })()}
             </div>
 
             {/* Stepper Indicator */}
@@ -1347,35 +1597,89 @@ export const AuthPage: React.FC = () => {
               {registerStep === 1 && (
                 <div style={{ display: 'grid', gap: '16px' }}>
                   {role === 'investor' ? (
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-                        Nombre y Apellido Completos (según DNI) *
-                      </label>
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej: Martín Alejandro Benítez"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          style={{
-                            width: '100%',
-                            height: '44px',
-                            paddingLeft: '40px',
-                            paddingRight: '14px',
-                            borderRadius: '10px',
-                            background: 'var(--color-surface-raised)',
-                            border: `1px solid ${formErrors.fullName ? '#ef4444' : 'var(--surface-glass-border)'}`,
-                            color: 'var(--text-primary)',
-                            fontSize: '14px',
-                            outline: 'none',
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                        <User size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-muted)' }} />
+                    <>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                          Nombre y Apellido Completos (según DNI) *
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ej: Martín Alejandro Benítez"
+                            value={fullName}
+                            onChange={(e) => {
+                              setFullName(e.target.value);
+                              if (formErrors.fullName) {
+                                setFormErrors((prev) => {
+                                  const c = { ...prev };
+                                  delete c.fullName;
+                                  return c;
+                                });
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              height: '44px',
+                              paddingLeft: '40px',
+                              paddingRight: '14px',
+                              borderRadius: '10px',
+                              background: 'var(--color-surface-raised)',
+                              border: `1px solid ${formErrors.fullName ? '#ef4444' : 'var(--surface-glass-border)'}`,
+                              color: 'var(--text-primary)',
+                              fontSize: '14px',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <User size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-muted)' }} />
+                        </div>
+                        {formErrors.fullName && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.fullName}</span>}
                       </div>
-                      {formErrors.fullName && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.fullName}</span>}
-                    </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                          Documento Nacional de Identidad (DNI) *
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type="text"
+                            required
+                            maxLength={8}
+                            placeholder="Ej: 38123456"
+                            value={dni}
+                            onBlur={() => checkSingleFieldAvailability('dni', dni)}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 8);
+                              setDni(val);
+                              if (formErrors.dni || formErrors.step1) {
+                                setFormErrors((prev) => {
+                                  const c = { ...prev };
+                                  delete c.dni;
+                                  delete c.step1;
+                                  return c;
+                                });
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              height: '44px',
+                              paddingLeft: '40px',
+                              paddingRight: '14px',
+                              borderRadius: '10px',
+                              background: 'var(--color-surface-raised)',
+                              border: `1px solid ${formErrors.dni ? '#ef4444' : 'var(--surface-glass-border)'}`,
+                              color: 'var(--text-primary)',
+                              fontSize: '14px',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <Fingerprint size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-muted)' }} />
+                        </div>
+                        {formErrors.dni && <span style={{ fontSize: '11px', color: '#ef4444' }}>{formErrors.dni}</span>}
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div>
@@ -1451,11 +1755,20 @@ export const AuthPage: React.FC = () => {
                         required
                         placeholder={role === 'investor' ? 'ejemplo@gmail.com' : 'contacto@dominio.com'}
                         value={email}
+                        onBlur={() => checkSingleFieldAvailability('email', email)}
                         onChange={(e) => {
                           setEmail(e.target.value);
                           if (googleVerifiedEmail && e.target.value !== googleVerifiedEmail) {
                             setGoogleVerifiedEmail(null);
                             setGoogleIdToken(null);
+                          }
+                          if (formErrors.email || formErrors.step1) {
+                            setFormErrors((prev) => {
+                              const c = { ...prev };
+                              delete c.email;
+                              delete c.step1;
+                              return c;
+                            });
                           }
                         }}
                         style={{
@@ -1493,7 +1806,18 @@ export const AuthPage: React.FC = () => {
                         required
                         placeholder="+54 9 11 5555-0199"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onBlur={() => checkSingleFieldAvailability('phone', phone)}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (formErrors.phone || formErrors.step1) {
+                            setFormErrors((prev) => {
+                              const c = { ...prev };
+                              delete c.phone;
+                              delete c.step1;
+                              return c;
+                            });
+                          }
+                        }}
                         style={{
                           width: '100%',
                           height: '44px',
@@ -1523,7 +1847,17 @@ export const AuthPage: React.FC = () => {
                         required
                         placeholder="Mínimo 8 caracteres, mayúscula, minúscula y número"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (formErrors.password || formErrors.step1) {
+                            setFormErrors((prev) => {
+                              const c = { ...prev };
+                              delete c.password;
+                              delete c.step1;
+                              return c;
+                            });
+                          }
+                        }}
                         style={{
                           width: '100%',
                           height: '44px',
@@ -1584,21 +1918,93 @@ export const AuthPage: React.FC = () => {
                       </div>
                     )}
                     {formErrors.googleAuth && (
-                      <div style={{ marginTop: '6px', fontSize: '11px', color: '#ef4444' }}>
-                        {formErrors.googleAuth}
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          background: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                        }}
+                      >
+                        <span style={{ fontSize: '12px', color: '#ef4444', lineHeight: 1.4, fontWeight: 500 }}>
+                          {formErrors.googleAuth}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsLogin(true);
+                            setFormErrors({});
+                          }}
+                          style={{
+                            alignSelf: 'flex-start',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            color: '#3b82f6',
+                            textDecoration: 'underline',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Ir a Iniciar Sesión con esta cuenta →
+                        </button>
                       </div>
                     )}
                   </div>
 
+                  {formErrors.step1 && (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        marginBottom: '4px',
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        color: '#f87171',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '10px',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#ef4444' }} />
+                      <div>
+                        <strong style={{ display: 'block', color: '#ef4444', marginBottom: '2px', fontSize: '13px' }}>
+                          Atención: No es posible avanzar al registro
+                        </strong>
+                        <span style={{ fontSize: '12px' }}>{formErrors.step1}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => {
-                      if (validateStep1()) setRegisterStep(2);
+                    disabled={isValidatingStep1}
+                    onClick={async () => {
+                      if (isValidatingStep1) return;
+                      const valid = await validateStep1();
+                      if (valid) {
+                        setRegisterStep(2);
+                      }
                     }}
                     className="btn-primary"
-                    style={{ height: '46px', marginTop: '12px', borderRadius: '10px', gap: '8px' }}
+                    style={{ height: '46px', marginTop: '12px', borderRadius: '10px', gap: '8px', opacity: isValidatingStep1 ? 0.7 : 1, cursor: isValidatingStep1 ? 'wait' : 'pointer' }}
                   >
-                    <span>{role === 'investor' ? 'Continuar a Biometría' : 'Continuar a Confirmación'}</span>
+                    <span>
+                      {isValidatingStep1
+                        ? 'Verificando datos...'
+                        : role === 'investor'
+                        ? 'Continuar a Biometría'
+                        : 'Continuar a Confirmación'}
+                    </span>
                     <ArrowRight size={16} />
                   </button>
 
